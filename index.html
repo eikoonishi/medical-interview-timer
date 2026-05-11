@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="医療面接タイマー">
+<meta name="theme-color" content="#ffffff">
+<title>医療面接タイマー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    color: #111111;
+    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 24px 20px 80px;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  h1 {
+    font-size: clamp(28px, 4vw, 40px);
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: 0.04em;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: #666;
+    margin-top: 8px;
+  }
+
+  .timers {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .timer-card {
+    border: 2px solid #111;
+    border-radius: 16px;
+    padding: 28px 24px;
+    background: #fff;
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+  }
+  .timer-card.warning {
+    border-color: #d97706;
+    background: #fffaf0;
+  }
+  .timer-card.finished {
+    border-color: #444;
+    background: #f5f5f5;
+  }
+
+  .timer-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .timer-name {
+    flex: 1;
+    font-size: 20px;
+    font-weight: 700;
+    border: none;
+    background: transparent;
+    color: #111;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-family: inherit;
+    min-width: 0;
+  }
+  .timer-name:focus {
+    outline: 2px solid #111;
+    background: #f9f9f9;
+  }
+  .icon-btn {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    color: #888;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+  }
+  .icon-btn:hover, .icon-btn:active {
+    background: #f0f0f0;
+    color: #111;
+  }
+
+  .display {
+    text-align: center;
+    font-size: clamp(72px, 16vw, 160px);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    color: #111;
+    padding: 16px 0 24px;
+    transition: color 0.3s ease;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .timer-card.warning .display {
+    color: #d97706;
+  }
+  .timer-card.finished .display {
+    color: #666;
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .btn {
+    padding: 18px 20px;
+    font-size: 18px;
+    font-weight: 700;
+    font-family: inherit;
+    border-radius: 12px;
+    border: 2px solid #111;
+    background: #111;
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.05s, background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn.secondary {
+    background: #fff;
+    color: #111;
+  }
+  .btn.secondary:hover { background: #f5f5f5; }
+
+  .setting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    color: #444;
+    font-size: 16px;
+  }
+  .setting label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .num-input {
+    width: 70px;
+    padding: 10px 8px;
+    font-size: 18px;
+    font-weight: 500;
+    text-align: center;
+    border: 1.5px solid #ccc;
+    border-radius: 8px;
+    font-family: inherit;
+    color: #111;
+    background: #fff;
+    -moz-appearance: textfield;
+  }
+  .num-input::-webkit-outer-spin-button,
+  .num-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .num-input:focus {
+    outline: 2px solid #111;
+    border-color: #111;
+  }
+  .num-input:disabled {
+    background: #f5f5f5;
+    color: #888;
+  }
+
+  .add-timer {
+    margin-top: 28px;
+    width: 100%;
+    padding: 20px;
+    font-size: 17px;
+    font-weight: 500;
+    font-family: inherit;
+    background: #fff;
+    color: #111;
+    border: 2px dashed #bbb;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .add-timer:hover { border-color: #111; background: #fafafa; }
+
+  footer {
+    text-align: center;
+    margin-top: 48px;
+    color: #999;
+    font-size: 12px;
+  }
+
+  @media (max-width: 480px) {
+    body { padding: 16px 12px 60px; }
+    .timer-card { padding: 20px 16px; }
+    .controls { grid-template-columns: 1fr; }
+    .btn { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>医療面接タイマー</h1>
+    <div class="subtitle">残り1分でオレンジ色に変わります</div>
+  </header>
+
+  <div class="timers" id="timers"></div>
+
+  <button class="add-timer" id="addBtn">＋ タイマーを追加</button>
+
+  <footer>残り時間タップで再設定 / 名前は自由に変更できます</footer>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const STORAGE_KEY = 'medical-interview-timer-v1';
+  const WARNING_SECONDS = 60;
+
+  /** @type {{id:number,name:string,totalSeconds:number,remaining:number,running:boolean,endAt:number|null}[]} */
+  let timers = [];
+  let nextId = 1;
+
+  function save() {
+    const data = timers.map(t => ({
+      id: t.id, name: t.name, totalSeconds: t.totalSeconds
+    }));
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ nextId, timers: data })); } catch(e) {}
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (!data || !Array.isArray(data.timers)) return false;
+      nextId = data.nextId || 1;
+      timers = data.timers.map(t => ({
+        id: t.id,
+        name: t.name,
+        totalSeconds: t.totalSeconds,
+        remaining: t.totalSeconds,
+        running: false,
+        endAt: null,
+      }));
+      return timers.length > 0;
+    } catch(e) { return false; }
+  }
+
+  function makeTimer(name, totalSeconds) {
+    return {
+      id: nextId++,
+      name: name,
+      totalSeconds: totalSeconds,
+      remaining: totalSeconds,
+      running: false,
+      endAt: null,
+    };
+  }
+
+  function fmt(sec) {
+    sec = Math.max(0, Math.ceil(sec));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  function beep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = 660;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6);
+      o.connect(g); g.connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + 0.65);
+      setTimeout(() => ctx.close(), 800);
+    } catch(e) {}
+  }
+
+  function render() {
+    const root = document.getElementById('timers');
+    root.innerHTML = '';
+    timers.forEach(t => root.appendChild(buildCard(t)));
+  }
+
+  function buildCard(t) {
+    const card = document.createElement('div');
+    card.className = 'timer-card';
+    card.dataset.id = t.id;
+
+    const header = document.createElement('div');
+    header.className = 'timer-header';
+    const name = document.createElement('input');
+    name.className = 'timer-name';
+    name.type = 'text';
+    name.value = t.name;
+    name.maxLength = 30;
+    name.addEventListener('change', () => { t.name = name.value || '無題'; name.value = t.name; save(); });
+    header.appendChild(name);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'icon-btn';
+    removeBtn.title = '削除';
+    removeBtn.setAttribute('aria-label', 'タイマーを削除');
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => {
+      if (timers.length <= 1) {
+        if (!confirm('最後のタイマーです。本当に削除しますか?')) return;
+      }
+      timers = timers.filter(x => x.id !== t.id);
+      save(); render();
+    });
+    header.appendChild(removeBtn);
+    card.appendChild(header);
+
+    const display = document.createElement('div');
+    display.className = 'display';
+    display.textContent = fmt(t.remaining);
+    display.addEventListener('click', () => {
+      if (t.running) return;
+      const cur = Math.floor(t.totalSeconds / 60);
+      const curS = t.totalSeconds % 60;
+      const input = prompt('時間を入力 (分:秒 または 分のみ)\n例: 7   または   1:30', curS ? cur + ':' + String(curS).padStart(2, '0') : String(cur));
+      if (input === null) return;
+      const parsed = parseTime(input);
+      if (parsed === null || parsed <= 0) { alert('正しい時間を入力してください'); return; }
+      t.totalSeconds = parsed;
+      t.remaining = parsed;
+      save(); render();
+    });
+    card.appendChild(display);
+
+    const controls = document.createElement('div');
+    controls.className = 'controls';
+    const startBtn = document.createElement('button');
+    startBtn.className = 'btn';
+    startBtn.textContent = t.running ? '一時停止' : 'スタート';
+    startBtn.addEventListener('click', () => toggle(t));
+    controls.appendChild(startBtn);
+
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'btn secondary';
+    resetBtn.textContent = 'リセット';
+    resetBtn.addEventListener('click', () => reset(t));
+    controls.appendChild(resetBtn);
+    card.appendChild(controls);
+
+    const setting = document.createElement('div');
+    setting.className = 'setting';
+    const minLabel = document.createElement('label');
+    const minInput = document.createElement('input');
+    minInput.className = 'num-input';
+    minInput.type = 'number';
+    minInput.min = '0';
+    minInput.max = '180';
+    minInput.value = Math.floor(t.totalSeconds / 60);
+    minInput.disabled = t.running;
+    minInput.inputMode = 'numeric';
+    minLabel.append(minInput, document.createTextNode('分'));
+
+    const secLabel = document.createElement('label');
+    const secInput = document.createElement('input');
+    secInput.className = 'num-input';
+    secInput.type = 'number';
+    secInput.min = '0';
+    secInput.max = '59';
+    secInput.value = t.totalSeconds % 60;
+    secInput.disabled = t.running;
+    secInput.inputMode = 'numeric';
+    secLabel.append(secInput, document.createTextNode('秒'));
+
+    function applyChange() {
+      const m = Math.max(0, Math.min(180, parseInt(minInput.value, 10) || 0));
+      const s = Math.max(0, Math.min(59, parseInt(secInput.value, 10) || 0));
+      const total = m * 60 + s;
+      if (total <= 0) return;
+      t.totalSeconds = total;
+      t.remaining = total;
+      minInput.value = m;
+      secInput.value = s;
+      display.textContent = fmt(t.remaining);
+      card.classList.remove('warning', 'finished');
+      save();
+    }
+    minInput.addEventListener('change', applyChange);
+    secInput.addEventListener('change', applyChange);
+
+    setting.append(minLabel, secLabel);
+    card.appendChild(setting);
+
+    if (!t.running) {
+      if (t.remaining <= 0 && t.totalSeconds > 0) card.classList.add('finished');
+      else if (t.remaining <= WARNING_SECONDS && t.remaining < t.totalSeconds) card.classList.add('warning');
+    } else {
+      if (t.remaining <= WARNING_SECONDS) card.classList.add('warning');
+    }
+
+    return card;
+  }
+
+  function parseTime(input) {
+    input = String(input).trim();
+    if (!input) return null;
+    if (input.indexOf(':') >= 0) {
+      const parts = input.split(':');
+      const m = parseInt(parts[0], 10);
+      const s = parseInt(parts[1], 10);
+      if (isNaN(m) || isNaN(s)) return null;
+      return m * 60 + s;
+    }
+    const m = parseInt(input, 10);
+    if (isNaN(m)) return null;
+    return m * 60;
+  }
+
+  function toggle(t) {
+    if (t.running) {
+      t.remaining = Math.max(0, (t.endAt - Date.now()) / 1000);
+      t.running = false;
+      t.endAt = null;
+    } else {
+      if (t.remaining <= 0) t.remaining = t.totalSeconds;
+      t.endAt = Date.now() + t.remaining * 1000;
+      t.running = true;
+    }
+    render();
+  }
+
+  function reset(t) {
+    t.running = false;
+    t.endAt = null;
+    t.remaining = t.totalSeconds;
+    render();
+  }
+
+  function tick() {
+    let needsRender = false;
+    timers.forEach(t => {
+      if (!t.running) return;
+      const remain = (t.endAt - Date.now()) / 1000;
+      const card = document.querySelector('.timer-card[data-id="' + t.id + '"]');
+      if (!card) return;
+      const display = card.querySelector('.display');
+      const wasWarning = card.classList.contains('warning');
+
+      if (remain <= 0) {
+        t.remaining = 0;
+        t.running = false;
+        t.endAt = null;
+        beep();
+        needsRender = true;
+        return;
+      }
+      t.remaining = remain;
+      display.textContent = fmt(remain);
+      const isWarning = remain <= WARNING_SECONDS;
+      if (isWarning && !wasWarning) card.classList.add('warning');
+      else if (!isWarning && wasWarning) card.classList.remove('warning');
+    });
+    if (needsRender) render();
+  }
+
+  document.getElementById('addBtn').addEventListener('click', () => {
+    timers.push(makeTimer('カスタムタイマー', 5 * 60));
+    save();
+    render();
+  });
+
+  // Wake lock to prevent iPad sleep while a timer is running
+  let wakeLock = null;
+  async function manageWakeLock() {
+    const anyRunning = timers.some(t => t.running);
+    if (anyRunning && !wakeLock && 'wakeLock' in navigator) {
+      try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+    } else if (!anyRunning && wakeLock) {
+      try { await wakeLock.release(); } catch(e) {}
+      wakeLock = null;
+    }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') manageWakeLock();
+  });
+
+  // Init
+  if (!load()) {
+    timers = [
+      makeTimer('医療面接', 7 * 60),
+    ];
+  }
+  render();
+  setInterval(() => { tick(); manageWakeLock(); }, 200);
+
+})();
+</script>
+</body>
+</html>
