@@ -399,7 +399,7 @@
     </div>
   </div>
   <p class="until-info" id="untilInfo"></p>
-  <p class="hint">設定した時刻ちょうどに医療面接が始まります（1分前にSP0アナウンス）</p>
+  <p class="hint">設定した時刻ちょうどに医療面接が始まります（1分前にSP00アナウンス）</p>
 
   <div class="jump">
     <h2>途中からスタート</h2>
@@ -425,7 +425,7 @@
     <summary style="cursor:pointer; font-size:14px; color:#666; font-weight:600;">音声テスト / デバッグ</summary>
     <div class="jump-row" style="margin-top:10px;">
       <span class="lbl">単体再生：</span>
-      <button class="pill" data-test="SP0">SP0</button>
+      <button class="pill" data-test="SP00">SP00</button>
       <button class="pill" data-test="SP1">SP1</button>
       <button class="pill" data-test="SP2">SP2</button>
       <button class="pill" data-test="SP3">SP3</button>
@@ -440,7 +440,7 @@
   <footer>東北大学医学部 SP医療面接</footer>
 </div>
 
-<audio id="audSP0" src="SP0.m4a" preload="auto" playsinline></audio>
+<audio id="audSP00" src="SP00.wav" preload="auto" playsinline></audio>
 <audio id="audSP1" src="SP1.m4a" preload="auto" playsinline></audio>
 <audio id="audSP2" src="SP2.m4a" preload="auto" playsinline></audio>
 <audio id="audSP3" src="SP3.m4a" preload="auto" playsinline></audio>
@@ -582,7 +582,7 @@
   // --- 音声 ---
   // ピピ音は Web Audio API、SPアナウンスは HTML5 <audio>
   let audioCtx = null;
-  const SP_KEYS = ['SP0', 'SP1', 'SP2', 'SP3', 'SP4', 'SP5'];
+  const SP_KEYS = ['SP00', 'SP1', 'SP2', 'SP3', 'SP4', 'SP5'];
   const html5Audio = {};
   let html5Unlocked = false;
 
@@ -817,8 +817,8 @@
     state.set = 1;
     state.scheduledTargetMs = null;
     el.endBanner.classList.remove('show');
-    // SP0 を流して、prep 1分 開始
-    enterPhase('prep', PREP_FIRST, { sp: 'SP0' });
+    // SP00 を流して、prep 1分 開始
+    enterPhase('prep', PREP_FIRST, { sp: 'SP00' });
   }
 
   function startSessionScheduled() {
@@ -856,8 +856,8 @@
   function onPhaseEnd() {
     // 現フェーズが0に達した時の遷移
     if (state.phase === 'scheduled') {
-      // 設定時刻まで残り1分 → 通常prep（SP0）
-      enterPhase('prep', PREP_FIRST, { sp: 'SP0' });
+      // 設定時刻まで残り1分 → 通常prep（SP00）
+      enterPhase('prep', PREP_FIRST, { sp: 'SP00' });
     } else if (state.phase === 'prep') {
       // 準備 → 医療面接
       enterPhase('interview', INTERVIEW_SEC, { beep: true, sp: 'SP4' });
