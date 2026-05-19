@@ -143,39 +143,91 @@
     gap: 12px;
     align-items: stretch;
   }
-  .time-input {
+  .time-wheels {
     display: flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    gap: 6px;
     background: #fff;
     border: 2px solid #ccc;
-    border-radius: 14px;
-    padding: 0 14px;
+    border-radius: 16px;
+    padding: 10px 16px 6px;
+    user-select: none;
+    -webkit-user-select: none;
   }
-  .time-input input {
-    width: 64px;
-    font-size: clamp(20px, 2.6vw, 26px);
-    font-weight: 700;
-    font-family: inherit;
+  .wheel-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+  .wheel-col::before {
+    content: '';
+    position: absolute;
+    top: 48px;
+    left: 4px;
+    right: 4px;
+    height: 48px;
+    background: rgba(0,0,0,0.05);
+    border-radius: 10px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .wheel {
+    height: 144px;
+    width: 84px;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 30%, black 70%, transparent 100%);
+            mask-image: linear-gradient(180deg, transparent 0%, black 30%, black 70%, transparent 100%);
+    position: relative;
+    z-index: 1;
+  }
+  .wheel::-webkit-scrollbar { display: none; }
+  .wheel-list {
+    padding: 48px 0;
+  }
+  .wheel-item {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    scroll-snap-align: center;
     font-variant-numeric: tabular-nums;
-    border: none;
-    outline: none;
-    background: transparent;
-    text-align: center;
-    padding: 18px 0;
+    font-feature-settings: "tnum";
+    font-size: 24px;
+    font-weight: 600;
+    color: #aaa;
+    transition: color 0.18s, font-size 0.18s, font-weight 0.18s;
+    cursor: pointer;
+  }
+  .wheel-item.selected {
     color: #111;
-    -moz-appearance: textfield;
+    font-size: 32px;
+    font-weight: 800;
   }
-  .time-input input::-webkit-outer-spin-button,
-  .time-input input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-  .time-input .colon, .time-input .unit-lbl {
-    font-size: clamp(14px, 1.6vw, 18px);
+  .wheel-label {
+    font-size: 11px;
     color: #666;
     font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-top: 2px;
   }
+  .wheel-colon {
+    font-size: clamp(28px, 3.4vw, 36px);
+    font-weight: 800;
+    color: #333;
+    align-self: flex-start;
+    margin-top: 56px;
+    padding: 0 2px;
+  }
+  .time-wheels.disabled { opacity: 0.55; pointer-events: none; }
   .ctrl-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -292,7 +344,8 @@
     body { padding: 16px 12px 40px; }
     .timer-row { padding: 14px 16px; }
     .start-scheduled { grid-template-columns: 1fr; }
-    .time-input { justify-content: center; padding: 4px 14px; }
+    .time-wheels { justify-content: center; padding: 8px 12px 4px; }
+    .wheel { width: 76px; }
     .btn { padding: 16px; }
     .clock { font-size: 14px; padding: 4px 8px; }
   }
@@ -326,11 +379,16 @@
 
   <div class="controls">
     <div class="start-scheduled">
-      <div class="time-input">
-        <input type="number" id="startHour" min="0" max="23" inputmode="numeric">
-        <span class="unit-lbl">時</span>
-        <input type="number" id="startMin" min="0" max="59" inputmode="numeric">
-        <span class="unit-lbl">分</span>
+      <div class="time-wheels" id="timeWheels">
+        <div class="wheel-col">
+          <div class="wheel" id="wheelHour"><div class="wheel-list" id="wheelHourList"></div></div>
+          <div class="wheel-label">時</div>
+        </div>
+        <span class="wheel-colon">:</span>
+        <div class="wheel-col">
+          <div class="wheel" id="wheelMin"><div class="wheel-list" id="wheelMinList"></div></div>
+          <div class="wheel-label">分</div>
+        </div>
       </div>
       <button class="btn primary" id="scheduledStartBtn">時刻を設定して開始</button>
     </div>
@@ -418,10 +476,61 @@
     resetBtn: document.getElementById('resetBtn'),
     endBanner: document.getElementById('endBanner'),
     clock: document.getElementById('clock'),
-    startHour: document.getElementById('startHour'),
-    startMin: document.getElementById('startMin'),
+    timeWheels: document.getElementById('timeWheels'),
+    wheelHour: document.getElementById('wheelHour'),
+    wheelHourList: document.getElementById('wheelHourList'),
+    wheelMin: document.getElementById('wheelMin'),
+    wheelMinList: document.getElementById('wheelMinList'),
     untilInfo: document.getElementById('untilInfo'),
   };
+
+  // 開始時刻設定値（ホイールピッカー）
+  const scheduledTime = { h: 9, m: 0 };
+
+  function createWheel(wheelEl, listEl, min, max, onChange) {
+    const ITEM_H = 48;
+    const items = [];
+    listEl.innerHTML = '';
+    for (let v = min; v <= max; v++) {
+      const div = document.createElement('div');
+      div.className = 'wheel-item';
+      div.textContent = String(v).padStart(2, '0');
+      div.dataset.value = v;
+      listEl.appendChild(div);
+      items.push(div);
+    }
+    function valueAtCurrent() {
+      const idx = Math.round(wheelEl.scrollTop / ITEM_H);
+      return Math.max(min, Math.min(max, min + idx));
+    }
+    function mark(v) {
+      const i = v - min;
+      items.forEach((it, k) => it.classList.toggle('selected', k === i));
+    }
+    let endTimer = null;
+    wheelEl.addEventListener('scroll', () => {
+      const v = valueAtCurrent();
+      mark(v);
+      if (endTimer) clearTimeout(endTimer);
+      endTimer = setTimeout(() => onChange(v), 100);
+    });
+    // タップで直接選択
+    items.forEach((it, i) => {
+      it.addEventListener('click', () => {
+        wheelEl.scrollTo({ top: i * ITEM_H, behavior: 'smooth' });
+      });
+    });
+    return {
+      setValue(v) {
+        v = Math.max(min, Math.min(max, v));
+        wheelEl.scrollTop = (v - min) * ITEM_H;
+        mark(v);
+      },
+    };
+  }
+
+  const wheelH = createWheel(el.wheelHour, el.wheelHourList, 0, 23, v => { scheduledTime.h = v; });
+  const wheelM = createWheel(el.wheelMin,  el.wheelMinList,  0, 59, v => { scheduledTime.m = v; });
 
   // --- 状態 ---
   // phase: 'idle' | 'scheduled' | 'prep' | 'interview' | 'feedback' | 'done'
@@ -644,28 +753,24 @@
     }
 
     // ボタン状態
-    if (state.phase === 'idle') {
+    const isIdle = state.phase === 'idle';
+    if (isIdle) {
       el.scheduledStartBtn.disabled = false;
       el.nowStartBtn.disabled = false;
-      el.startHour.disabled = false;
-      el.startMin.disabled = false;
       el.pauseBtn.disabled = true;
       el.pauseBtn.textContent = 'ポーズ';
     } else if (state.phase === 'done') {
       el.scheduledStartBtn.disabled = true;
       el.nowStartBtn.disabled = true;
-      el.startHour.disabled = true;
-      el.startMin.disabled = true;
       el.pauseBtn.disabled = true;
     } else {
       el.scheduledStartBtn.disabled = true;
       el.nowStartBtn.disabled = true;
-      el.startHour.disabled = true;
-      el.startMin.disabled = true;
       // scheduledフェーズ中はポーズしない（目標時刻が動かないため）
       el.pauseBtn.disabled = (state.phase === 'scheduled');
       el.pauseBtn.textContent = state.running ? 'ポーズ' : '再開';
     }
+    el.timeWheels.classList.toggle('disabled', !isIdle);
 
     // 終了バナー
     if (state.phase === 'done') el.endBanner.classList.add('show');
@@ -717,12 +822,8 @@
   }
 
   function startSessionScheduled() {
-    const h = parseInt(el.startHour.value, 10);
-    const m = parseInt(el.startMin.value, 10);
-    if (isNaN(h) || h < 0 || h > 23 || isNaN(m) || m < 0 || m > 59) {
-      alert('開始時刻を正しく入力してください（時：0-23, 分：0-59）');
-      return;
-    }
+    const h = scheduledTime.h;
+    const m = scheduledTime.m;
     const now = new Date();
     const target = new Date(now);
     target.setHours(h, m, 0, 0);
@@ -933,15 +1034,19 @@
   }
 
   // --- 初期化 ---
-  // 開始時刻入力のデフォルト：現在時刻＋10分（次の5分区切り）
+  // 開始時刻のデフォルト：現在時刻＋10分（次の5分区切り）
   (function initStartTime() {
     const n = new Date();
     n.setMinutes(n.getMinutes() + 10);
     const m = Math.ceil(n.getMinutes() / 5) * 5;
     if (m >= 60) { n.setHours(n.getHours() + 1); n.setMinutes(0); }
     else n.setMinutes(m);
-    el.startHour.value = String(n.getHours());
-    el.startMin.value = String(n.getMinutes()).padStart(2, '0');
+    scheduledTime.h = n.getHours();
+    scheduledTime.m = n.getMinutes();
+    requestAnimationFrame(() => {
+      wheelH.setValue(scheduledTime.h);
+      wheelM.setValue(scheduledTime.m);
+    });
   })();
 
   updateClock();
