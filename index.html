@@ -541,6 +541,7 @@
     endAt: null,       // running 時の終了予定（ms）
     running: false,
     sp2Played: false,  // フィードバック中SP2再生済みフラグ
+    sp00Played: false, // 時刻指定スタート時のSP00再生済みフラグ
     jumpSet: 1,        // 途中スタート用のセット選択
     scheduledTargetMs: null, // 設定された医療面接開始時刻
   };
@@ -843,21 +844,22 @@
     state.set = 1;
     state.scheduledTargetMs = target.getTime();
     el.endBanner.classList.remove('show');
-    // scheduled フェーズで (diffSec - PREP_FIRST) 秒待機 → prep に入る
-    const waitSec = diffSec - PREP_FIRST;
+    // scheduled フェーズで設定時刻まで一本のカウントダウン。残り60秒で prep + SP00 に切替
     state.phase = 'scheduled';
-    state.remaining = waitSec;
-    state.endAt = Date.now() + waitSec * 1000;
+    state.remaining = diffSec;
+    state.endAt = target.getTime();
     state.running = true;
     state.sp2Played = false;
+    state.sp00Played = false;
     render();
   }
 
   function onPhaseEnd() {
     // 現フェーズが0に達した時の遷移
     if (state.phase === 'scheduled') {
-      // 設定時刻まで残り1分 → 通常prep（SP00）
-      enterPhase('prep', PREP_FIRST, { sp: 'SP00' });
+      // 通常は tick 内で残り60秒のときに prep へ遷移するためここには来ない。
+      // フォールバック：そのまま医療面接へ
+      enterPhase('interview', INTERVIEW_SEC, { beep: true, sp: 'SP4' });
     } else if (state.phase === 'prep') {
       // 準備 → 医療面接
       enterPhase('interview', INTERVIEW_SEC, { beep: true, sp: 'SP4' });
@@ -905,6 +907,7 @@
     state.endAt = null;
     state.running = false;
     state.sp2Played = false;
+    state.sp00Played = false;
     state.scheduledTargetMs = null;
     stopSP();
     render();
@@ -933,6 +936,14 @@
     if (state.phase === 'feedback' && !state.sp2Played && remain <= FB_SP2_AT_REMAIN && remain > 0) {
       state.sp2Played = true;
       playSP('SP2');
+    }
+
+    // 時刻指定スタート：残り60秒を最初に下回ったら SP00 を流して prep へ遷移
+    if (state.phase === 'scheduled' && !state.sp00Played && remain <= PREP_FIRST && remain > 0) {
+      state.sp00Played = true;
+      state.phase = 'prep';
+      playSP('SP00');
+      render();
     }
 
     if (remain <= 0) {
