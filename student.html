@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="学生間医療面接タイマー">
+<meta name="theme-color" content="#ffffff">
+<title>東北大学医学部 学生間医療面接タイマー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #f7f7f8;
+    color: #111;
+    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 24px 20px 60px;
+  }
+  .container { max-width: 960px; margin: 0 auto; position: relative; }
+
+  .clock {
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-size: clamp(16px, 2vw, 22px);
+    font-weight: 700;
+    color: #333;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    background: #fff;
+    border: 1.5px solid #ddd;
+    border-radius: 10px;
+    padding: 6px 12px;
+    letter-spacing: 0.04em;
+  }
+
+  header { text-align: center; margin-bottom: 20px; padding-top: 6px; }
+  h1 {
+    font-size: clamp(20px, 3vw, 30px);
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: 0.04em;
+  }
+  .head-sub {
+    margin-top: 6px;
+    font-size: clamp(13px, 1.6vw, 15px);
+    color: #666;
+    font-weight: 500;
+  }
+  .set-line {
+    margin-top: 8px;
+    font-size: clamp(16px, 2vw, 20px);
+    color: #444;
+    font-weight: 500;
+  }
+  .set-line .num { font-weight: 900; color: #111; }
+  .set-line .phase {
+    margin-left: 14px;
+    padding: 3px 10px;
+    background: #111;
+    color: #fff;
+    border-radius: 999px;
+    font-size: 0.85em;
+    font-weight: 700;
+  }
+  .set-line .phase.idle { background: #888; }
+  .set-line .phase.scheduled { background: #6366f1; }
+  .set-line .phase.scenario { background: #2563eb; }
+  .set-line .phase.interview { background: #059669; }
+  .set-line .phase.feedback { background: #d97706; }
+  .set-line .phase.buffer { background: #7c3aed; }
+  .set-line .phase.done { background: #444; }
+
+  .scheduled-bar {
+    margin: 12px 0 16px;
+    padding: 14px 18px;
+    border-radius: 12px;
+    background: #eef2ff;
+    border: 1.5px solid #c7d2fe;
+    color: #3730a3;
+    font-weight: 700;
+    text-align: center;
+    font-size: clamp(15px, 1.9vw, 18px);
+    display: none;
+  }
+  .scheduled-bar.show { display: block; }
+  .scheduled-bar .big {
+    font-size: 1.5em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    margin: 0 4px;
+  }
+
+  .timers {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .timer-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 16px;
+    border: 2px solid #ddd;
+    border-radius: 16px;
+    padding: 16px 22px;
+    background: #fff;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  }
+  .timer-row .label {
+    font-size: clamp(17px, 2.2vw, 22px);
+    font-weight: 700;
+    color: #333;
+  }
+  .timer-row .sub {
+    display: block;
+    font-size: 0.7em;
+    color: #888;
+    font-weight: 500;
+    margin-top: 2px;
+  }
+  .timer-row .time {
+    font-size: clamp(36px, 6.4vw, 56px);
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    color: #555;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .timer-row .time .unit {
+    font-size: 0.45em;
+    font-weight: 500;
+    color: #888;
+    margin: 0 2px;
+  }
+  .timer-row.active {
+    border-color: #111;
+    background: #fff;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  }
+  .timer-row.active .label { color: #111; }
+  .timer-row.active .time { color: #111; }
+  .timer-row.active.warning .time { color: #d97706; }
+  .timer-row.active.warning { border-color: #d97706; background: #fffaf0; }
+
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .start-scheduled {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: stretch;
+  }
+  .time-wheels {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: #fff;
+    border: 2px solid #ccc;
+    border-radius: 16px;
+    padding: 10px 16px 6px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .wheel-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+  .wheel-col::before {
+    content: '';
+    position: absolute;
+    top: 48px;
+    left: 4px;
+    right: 4px;
+    height: 48px;
+    background: rgba(0,0,0,0.05);
+    border-radius: 10px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .wheel {
+    height: 144px;
+    width: 84px;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 30%, black 70%, transparent 100%);
+            mask-image: linear-gradient(180deg, transparent 0%, black 30%, black 70%, transparent 100%);
+    position: relative;
+    z-index: 1;
+  }
+  .wheel::-webkit-scrollbar { display: none; }
+  .wheel-list { padding: 48px 0; }
+  .wheel-item {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    scroll-snap-align: center;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    font-size: 24px;
+    font-weight: 600;
+    color: #aaa;
+    transition: color 0.18s, font-size 0.18s, font-weight 0.18s;
+    cursor: pointer;
+  }
+  .wheel-item.selected {
+    color: #111;
+    font-size: 32px;
+    font-weight: 800;
+  }
+  .wheel-label {
+    font-size: 11px;
+    color: #666;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-top: 2px;
+  }
+  .wheel-colon {
+    font-size: clamp(28px, 3.4vw, 36px);
+    font-weight: 800;
+    color: #333;
+    align-self: flex-start;
+    margin-top: 56px;
+    padding: 0 2px;
+  }
+  .time-wheels.disabled { opacity: 0.55; pointer-events: none; }
+  .ctrl-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .btn {
+    padding: 22px 16px;
+    font-size: clamp(16px, 2.2vw, 20px);
+    font-weight: 700;
+    font-family: inherit;
+    border-radius: 14px;
+    border: 2px solid #111;
+    background: #fff;
+    color: #111;
+    cursor: pointer;
+    transition: transform 0.05s, background 0.15s, color 0.15s, opacity 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary { background: #111; color: #fff; }
+  .btn.primary:hover { background: #333; }
+  .btn.secondary:hover { background: #f0f0f0; }
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .hint {
+    text-align: center;
+    color: #666;
+    font-size: 14px;
+    margin: 4px 0 24px;
+  }
+
+  .jump {
+    border-top: 1px solid #ddd;
+    padding-top: 20px;
+    margin-top: 24px;
+  }
+  .jump h2 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 12px;
+    color: #444;
+  }
+  .jump-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .jump-row .lbl {
+    font-size: 14px;
+    color: #666;
+    min-width: 60px;
+  }
+  .pill {
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    border-radius: 999px;
+    border: 1.5px solid #ccc;
+    background: #fff;
+    color: #555;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .pill:hover { border-color: #111; color: #111; }
+  .pill.selected {
+    background: #111;
+    color: #fff;
+    border-color: #111;
+  }
+  .pill.action {
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .end-banner {
+    margin-top: 28px;
+    padding: 32px 20px;
+    border-radius: 16px;
+    background: #111;
+    color: #fff;
+    text-align: center;
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 700;
+    line-height: 1.5;
+    display: none;
+  }
+  .end-banner.show { display: block; }
+
+  footer {
+    text-align: center;
+    margin-top: 32px;
+    color: #999;
+    font-size: 12px;
+  }
+  footer a {
+    color: #666;
+    text-decoration: none;
+    border-bottom: 1px dotted #999;
+  }
+  footer a:hover { color: #111; }
+
+  @media (max-width: 600px) {
+    body { padding: 16px 12px 40px; }
+    .timer-row { padding: 12px 14px; }
+    .start-scheduled { grid-template-columns: 1fr; }
+    .time-wheels { justify-content: center; padding: 8px 12px 4px; }
+    .wheel { width: 76px; }
+    .btn { padding: 16px; }
+    .clock { font-size: 14px; padding: 4px 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="clock" id="clock">--:--:--</div>
+  <header>
+    <h1>東北大学医学部　学生間医療面接タイマー</h1>
+    <div class="head-sub">13:30〜14:20 学生間 医療面接 ／ 1セット12分 × 3セット（医師役・患者役を交代）</div>
+    <div class="set-line">
+      <span class="num" id="setNum">1</span> / 3 セット目
+      <span class="phase idle" id="phaseTag">待機中</span>
+    </div>
+  </header>
+
+  <div class="scheduled-bar" id="scheduledBar">
+    開始まで <span class="big" id="scheduledRemain">--分--秒</span>
+    （<span id="scheduledTarget">--:--</span> 開始）
+  </div>
+
+  <div class="timers">
+    <div class="timer-row" id="rowScenario">
+      <div class="label">患者役 シナリオ読み込み<span class="sub">1分</span></div>
+      <div class="time" id="timeScenario">01<span class="unit">分</span>00<span class="unit">秒</span></div>
+    </div>
+    <div class="timer-row" id="rowInterview">
+      <div class="label">医療面接<span class="sub">8分</span></div>
+      <div class="time" id="timeInterview">08<span class="unit">分</span>00<span class="unit">秒</span></div>
+    </div>
+    <div class="timer-row" id="rowFeedback">
+      <div class="label">教員からのフィードバック<span class="sub">2分</span></div>
+      <div class="time" id="timeFeedback">02<span class="unit">分</span>00<span class="unit">秒</span></div>
+    </div>
+    <div class="timer-row" id="rowBuffer">
+      <div class="label">予備時間<span class="sub">30秒（次セットへ）</span></div>
+      <div class="time" id="timeBuffer">00<span class="unit">分</span>30<span class="unit">秒</span></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="start-scheduled">
+      <div class="time-wheels" id="timeWheels">
+        <div class="wheel-col">
+          <div class="wheel" id="wheelHour"><div class="wheel-list" id="wheelHourList"></div></div>
+          <div class="wheel-label">時</div>
+        </div>
+        <span class="wheel-colon">:</span>
+        <div class="wheel-col">
+          <div class="wheel" id="wheelMin"><div class="wheel-list" id="wheelMinList"></div></div>
+          <div class="wheel-label">分</div>
+        </div>
+      </div>
+      <button class="btn primary" id="scheduledStartBtn">時刻を設定して開始</button>
+    </div>
+    <button class="btn secondary" id="nowStartBtn">今すぐ開始（シナリオ読み込みから）</button>
+    <div class="ctrl-row">
+      <button class="btn secondary" id="pauseBtn">ポーズ</button>
+      <button class="btn secondary" id="resetBtn">リセット</button>
+    </div>
+  </div>
+  <p class="hint">設定時刻ちょうどに「シナリオ読み込み」が始まります（フェーズの切替時にブザーが鳴ります）</p>
+
+  <div class="jump">
+    <h2>途中からスタート</h2>
+    <div class="jump-row">
+      <span class="lbl">セット：</span>
+      <button class="pill selected" data-set="1">1セット目</button>
+      <button class="pill" data-set="2">2セット目</button>
+      <button class="pill" data-set="3">3セット目</button>
+    </div>
+    <div class="jump-row">
+      <span class="lbl">開始：</span>
+      <button class="pill action" data-jump="scenario">シナリオ読み込みから</button>
+      <button class="pill action" data-jump="interview">医療面接から</button>
+      <button class="pill action" data-jump="feedback">フィードバックから</button>
+    </div>
+  </div>
+
+  <div class="end-banner" id="endBanner">
+    学生間医療面接の実習終了です。<br>お疲れ様でした。
+  </div>
+
+  <details class="jump" style="margin-top:18px;">
+    <summary style="cursor:pointer; font-size:14px; color:#666; font-weight:600;">音声テスト（実習前にiPadで動作確認）</summary>
+    <div class="jump-row" style="margin-top:10px;">
+      <span class="lbl">ブザー：</span>
+      <button class="pill" data-test="BEEP">ピピ音（フェーズ切替）</button>
+      <button class="pill" data-test="LONG">ピピピ音（面接終了）</button>
+      <button class="pill" data-test="CHIME">終了チャイム</button>
+    </div>
+    <div class="jump-row">
+      <span class="lbl">アナウンス：</span>
+      <button class="pill" data-voice="IntStart">医療面接を始めてください</button>
+      <button class="pill" data-voice="FbStart">フィードバックを始めてください</button>
+      <button class="pill" data-voice="FbEnd">終了です</button>
+    </div>
+    <div class="jump-row">
+      <span class="lbl">操作：</span>
+      <button class="pill" id="clearLogBtn">ログ消去</button>
+    </div>
+    <pre id="debugLog" style="margin-top:10px; padding:10px; background:#f0f0f0; border-radius:6px; font-size:12px; max-height:240px; overflow:auto; white-space:pre-wrap; word-break:break-all;"></pre>
+  </details>
+
+  <footer>
+    東北大学医学部 学生間 医療面接 ／
+    <a href="index.html">SP医療面接タイマーへ →</a>
+  </footer>
+</div>
+
+<audio id="audIntStart" src="interview_start.wav" preload="auto" playsinline></audio>
+<audio id="audFbStart"  src="feedback_start.wav"  preload="auto" playsinline></audio>
+<audio id="audFbEnd"    src="feedback_end.wav"    preload="auto" playsinline></audio>
+
+<script>
+(function() {
+  'use strict';
+
+  // --- 設定 ---
+  const SCENARIO_SEC = 60;       // 患者役シナリオ読み込み 1分
+  const INTERVIEW_SEC = 8 * 60;  // 医療面接 8分
+  const FEEDBACK_SEC = 2 * 60;   // 教員FB 2分
+  const BUFFER_SEC = 30;         // 予備時間 30秒
+  const TOTAL_SETS = 3;
+  const WARNING_SECONDS = 30;    // 残り30秒で警告色
+
+  // --- 要素 ---
+  const el = {
+    setNum: document.getElementById('setNum'),
+    phaseTag: document.getElementById('phaseTag'),
+    scheduledBar: document.getElementById('scheduledBar'),
+    scheduledRemain: document.getElementById('scheduledRemain'),
+    scheduledTarget: document.getElementById('scheduledTarget'),
+    rowScenario: document.getElementById('rowScenario'),
+    rowInterview: document.getElementById('rowInterview'),
+    rowFeedback: document.getElementById('rowFeedback'),
+    rowBuffer: document.getElementById('rowBuffer'),
+    timeScenario: document.getElementById('timeScenario'),
+    timeInterview: document.getElementById('timeInterview'),
+    timeFeedback: document.getElementById('timeFeedback'),
+    timeBuffer: document.getElementById('timeBuffer'),
+    scheduledStartBtn: document.getElementById('scheduledStartBtn'),
+    nowStartBtn: document.getElementById('nowStartBtn'),
+    pauseBtn: document.getElementById('pauseBtn'),
+    resetBtn: document.getElementById('resetBtn'),
+    endBanner: document.getElementById('endBanner'),
+    clock: document.getElementById('clock'),
+    timeWheels: document.getElementById('timeWheels'),
+    wheelHour: document.getElementById('wheelHour'),
+    wheelHourList: document.getElementById('wheelHourList'),
+    wheelMin: document.getElementById('wheelMin'),
+    wheelMinList: document.getElementById('wheelMinList'),
+  };
+
+  // 開始時刻設定値（ホイールピッカー）
+  const scheduledTime = { h: 13, m: 30 };
+
+  function createWheel(wheelEl, listEl, min, max, onChange) {
+    const ITEM_H = 48;
+    const items = [];
+    listEl.innerHTML = '';
+    for (let v = min; v <= max; v++) {
+      const div = document.createElement('div');
+      div.className = 'wheel-item';
+      div.textContent = String(v).padStart(2, '0');
+      div.dataset.value = v;
+      listEl.appendChild(div);
+      items.push(div);
+    }
+    function valueAtCurrent() {
+      const idx = Math.round(wheelEl.scrollTop / ITEM_H);
+      return Math.max(min, Math.min(max, min + idx));
+    }
+    function mark(v) {
+      const i = v - min;
+      items.forEach((it, k) => it.classList.toggle('selected', k === i));
+    }
+    let endTimer = null;
+    wheelEl.addEventListener('scroll', () => {
+      const v = valueAtCurrent();
+      mark(v);
+      if (endTimer) clearTimeout(endTimer);
+      endTimer = setTimeout(() => onChange(v), 100);
+    });
+    items.forEach((it, i) => {
+      it.addEventListener('click', () => {
+        wheelEl.scrollTo({ top: i * ITEM_H, behavior: 'smooth' });
+      });
+    });
+    return {
+      setValue(v) {
+        v = Math.max(min, Math.min(max, v));
+        wheelEl.scrollTop = (v - min) * ITEM_H;
+        mark(v);
+      },
+    };
+  }
+
+  const wheelH = createWheel(el.wheelHour, el.wheelHourList, 0, 23, v => { scheduledTime.h = v; });
+  const wheelM = createWheel(el.wheelMin,  el.wheelMinList,  0, 59, v => { scheduledTime.m = v; });
+
+  // --- 状態 ---
+  // phase: 'idle' | 'scheduled' | 'scenario' | 'interview' | 'feedback' | 'buffer' | 'done'
+  const state = {
+    phase: 'idle',
+    set: 1,
+    remaining: 0,
+    endAt: null,
+    running: false,
+    jumpSet: 1,
+    scheduledTargetMs: null,
+  };
+
+  // --- ユーティリティ ---
+  function fmtParts(sec) {
+    sec = Math.max(0, Math.ceil(sec));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return [String(m).padStart(2, '0'), String(s).padStart(2, '0')];
+  }
+  function setTimeEl(elTime, sec) {
+    const [m, s] = fmtParts(sec);
+    elTime.innerHTML = m + '<span class="unit">分</span>' + s + '<span class="unit">秒</span>';
+  }
+  function setPhaseTag() {
+    const map = {
+      idle:      ['待機中',         'idle'],
+      scheduled: ['開始時刻待ち',   'scheduled'],
+      scenario:  ['シナリオ読み込み', 'scenario'],
+      interview: ['医療面接',       'interview'],
+      feedback:  ['フィードバック', 'feedback'],
+      buffer:    ['予備時間',       'buffer'],
+      done:      ['終了',           'done'],
+    };
+    const [label, cls] = map[state.phase];
+    el.phaseTag.textContent = label;
+    el.phaseTag.className = 'phase ' + cls;
+  }
+
+  // --- デバッグログ ---
+  function dlog(msg) {
+    const d = document.getElementById('debugLog');
+    if (!d) return;
+    const ts = new Date().toLocaleTimeString('ja-JP', { hour12: false });
+    d.textContent += '[' + ts + '] ' + msg + '\n';
+    d.scrollTop = d.scrollHeight;
+  }
+
+  // --- 音声（ブザーのみ） ---
+  let audioCtx = null;
+  function getAudioCtx() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    }
+    return audioCtx;
+  }
+  // --- HTML5 音声アナウンス ---
+  // VOICE_KEYS と <audio> id / フェーズ名のマッピング
+  const VOICE_KEYS = ['IntStart', 'FbStart', 'FbEnd'];
+  const html5Audio = {};
+  let html5Unlocked = false;
+
+  function preloadVoiceAudio() {
+    VOICE_KEYS.forEach(k => {
+      const a = document.getElementById('aud' + k);
+      html5Audio[k] = a;
+      if (!a) { dlog(k + ' 要素なし'); return; }
+      a.addEventListener('canplaythrough', () =>
+        dlog(k + ' canplaythrough (' + (a.duration ? a.duration.toFixed(2) + 's' : '?') + ')'), { once: true });
+      a.addEventListener('error', () => {
+        const err = a.error;
+        dlog(k + ' load error: code=' + (err && err.code) + ' ' + (err && err.message || ''));
+      });
+      try { a.load(); } catch(e) {}
+    });
+  }
+
+  function unlockAudio(excludeKey) {
+    const ctx = getAudioCtx();
+    if (ctx && ctx.state === 'suspended') {
+      const p = ctx.resume();
+      if (p && p.catch) p.catch(() => {});
+    }
+    if (html5Unlocked) return;
+    html5Unlocked = true;
+    // 各 audio 要素を muted で短く再生→停止 して iOS の自動再生制限を解除
+    VOICE_KEYS.forEach(k => {
+      if (k === excludeKey) return;
+      const a = html5Audio[k];
+      if (!a) return;
+      a.muted = true;
+      const p = a.play();
+      if (p && p.then) {
+        p.then(() => {
+          try { a.pause(); a.currentTime = 0; } catch(e) {}
+          a.muted = false;
+        }).catch(() => { a.muted = false; });
+      } else {
+        try { a.pause(); a.currentTime = 0; } catch(e) {}
+        a.muted = false;
+      }
+    });
+    dlog('unlock 実行 (除外=' + (excludeKey || 'なし') + ')');
+  }
+
+  function playVoice(key) {
+    // この呼び出しが最初のユーザー操作の中なら、自分自身を除外して他をunlock
+    unlockAudio(key);
+    const a = html5Audio[key];
+    if (!a) { dlog('playVoice ' + key + ' 要素なし'); return; }
+    a.muted = false;
+    try { a.pause(); } catch(e) {}
+    try { a.currentTime = 0; } catch(e) {}
+    const p = a.play();
+    if (p && p.then) {
+      p.then(() => dlog('▶ ' + key + ' 再生開始 (rs=' + a.readyState + ')'))
+       .catch(e => dlog('▶ ' + key + ' 再生失敗: ' + (e && e.message || e) + ' (rs=' + a.readyState + ', netState=' + a.networkState + ')'));
+    } else {
+      dlog('▶ ' + key + ' play() (rs=' + a.readyState + ')');
+    }
+  }
+
+  function stopAllVoice() {
+    VOICE_KEYS.forEach(k => {
+      const a = html5Audio[k];
+      if (!a) return;
+      try { a.pause(); a.currentTime = 0; } catch(e) {}
+    });
+  }
+  // 標準ブザー（フェーズ切替用）：2連ピピ音
+  function beep() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    for (let i = 0; i < 2; i++) {
+      const t0 = now + i * 0.18;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.3, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0);
+      o.stop(t0 + 0.15);
+    }
+  }
+  // 長めブザー（医療面接終了など強調用）：3連ピピピ音
+  function longBuzz() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    for (let i = 0; i < 3; i++) {
+      const t0 = now + i * 0.20;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = 760;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.32, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0);
+      o.stop(t0 + 0.18);
+    }
+  }
+  // 終了チャイム（全終了時）：上昇3音
+  function chime() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    const notes = [
+      { freq: 1047, t: 0.00, dur: 0.32 },
+      { freq: 1319, t: 0.18, dur: 0.32 },
+      { freq: 1568, t: 0.36, dur: 0.55 },
+    ];
+    notes.forEach(n => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = n.freq;
+      const t0 = now + n.t;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.3, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + n.dur);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0);
+      o.stop(t0 + n.dur + 0.05);
+    });
+  }
+
+  // --- 描画 ---
+  function render() {
+    el.setNum.textContent = state.set;
+    setPhaseTag();
+
+    const rows = [el.rowScenario, el.rowInterview, el.rowFeedback, el.rowBuffer];
+    rows.forEach(r => r.classList.remove('active', 'warning'));
+
+    // 各タイマー表示値（active 以外は初期値固定）
+    const fixedOrLive = (phaseKey, defaultSec) =>
+      state.phase === phaseKey ? state.remaining : defaultSec;
+    setTimeEl(el.timeScenario,  fixedOrLive('scenario',  SCENARIO_SEC));
+    setTimeEl(el.timeInterview, fixedOrLive('interview', INTERVIEW_SEC));
+    setTimeEl(el.timeFeedback,  fixedOrLive('feedback',  FEEDBACK_SEC));
+    setTimeEl(el.timeBuffer,    fixedOrLive('buffer',    BUFFER_SEC));
+
+    // active ハイライト
+    if (state.phase === 'scenario')  el.rowScenario.classList.add('active');
+    if (state.phase === 'interview') el.rowInterview.classList.add('active');
+    if (state.phase === 'feedback')  el.rowFeedback.classList.add('active');
+    if (state.phase === 'buffer')    el.rowBuffer.classList.add('active');
+
+    // 警告色
+    if (state.running && state.remaining <= WARNING_SECONDS) {
+      const row =
+        state.phase === 'scenario'  ? el.rowScenario  :
+        state.phase === 'interview' ? el.rowInterview :
+        state.phase === 'feedback'  ? el.rowFeedback  :
+        state.phase === 'buffer'    ? el.rowBuffer    : null;
+      if (row) row.classList.add('warning');
+    }
+
+    // 開始時刻待ちバー
+    if (state.phase === 'scheduled' && state.scheduledTargetMs) {
+      el.scheduledBar.classList.add('show');
+      updateScheduledBar();
+    } else {
+      el.scheduledBar.classList.remove('show');
+    }
+
+    // ボタン状態
+    const isIdle = state.phase === 'idle';
+    if (isIdle) {
+      el.scheduledStartBtn.disabled = false;
+      el.nowStartBtn.disabled = false;
+      el.pauseBtn.disabled = true;
+      el.pauseBtn.textContent = 'ポーズ';
+    } else if (state.phase === 'done') {
+      el.scheduledStartBtn.disabled = true;
+      el.nowStartBtn.disabled = true;
+      el.pauseBtn.disabled = true;
+    } else {
+      el.scheduledStartBtn.disabled = true;
+      el.nowStartBtn.disabled = true;
+      el.pauseBtn.disabled = (state.phase === 'scheduled');
+      el.pauseBtn.textContent = state.running ? 'ポーズ' : '再開';
+    }
+    el.timeWheels.classList.toggle('disabled', !isIdle);
+
+    if (state.phase === 'done') el.endBanner.classList.add('show');
+    else el.endBanner.classList.remove('show');
+  }
+
+  function updateScheduledBar() {
+    if (!state.scheduledTargetMs) return;
+    const diffSec = Math.max(0, Math.ceil((state.scheduledTargetMs - Date.now()) / 1000));
+    const m = Math.floor(diffSec / 60);
+    const s = diffSec % 60;
+    el.scheduledRemain.textContent = m + '分' + String(s).padStart(2, '0') + '秒';
+    const t = new Date(state.scheduledTargetMs);
+    const hh = String(t.getHours()).padStart(2, '0');
+    const mm = String(t.getMinutes()).padStart(2, '0');
+    el.scheduledTarget.textContent = hh + ':' + mm;
+  }
+
+  // --- フェーズ遷移 ---
+  function enterPhase(phase, durationSec, opts) {
+    opts = opts || {};
+    state.phase = phase;
+    state.remaining = durationSec;
+    state.endAt = Date.now() + durationSec * 1000;
+    state.running = true;
+    if (opts.beep === 'long') longBuzz();
+    else if (opts.beep) beep();
+    if (opts.voice) {
+      // ブザーが鳴り終わってからアナウンス
+      const delay = opts.beep === 'long' ? 800 : opts.beep ? 500 : 0;
+      setTimeout(() => playVoice(opts.voice), delay);
+    }
+    render();
+  }
+
+  function startSessionNow() {
+    unlockAudio();
+    state.set = 1;
+    state.scheduledTargetMs = null;
+    el.endBanner.classList.remove('show');
+    // 開始ボタンを押した瞬間にビープ → シナリオ読み込み開始
+    enterPhase('scenario', SCENARIO_SEC, { beep: true });
+  }
+
+  function startSessionScheduled() {
+    const h = scheduledTime.h;
+    const m = scheduledTime.m;
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(h, m, 0, 0);
+    let diffSec = (target.getTime() - now.getTime()) / 1000;
+
+    if (diffSec <= 0) {
+      alert('指定した時刻はすでに過ぎています。');
+      return;
+    }
+    if (diffSec < 5) {
+      if (!confirm('開始まで5秒未満です。今すぐ開始しますか？')) return;
+      startSessionNow();
+      return;
+    }
+
+    unlockAudio();
+    state.set = 1;
+    state.scheduledTargetMs = target.getTime();
+    el.endBanner.classList.remove('show');
+    state.phase = 'scheduled';
+    state.remaining = diffSec;
+    state.endAt = target.getTime();
+    state.running = true;
+    render();
+  }
+
+  function onPhaseEnd() {
+    if (state.phase === 'scheduled') {
+      // 設定時刻到達 → シナリオ読み込み開始（ブザー）
+      enterPhase('scenario', SCENARIO_SEC, { beep: true });
+    } else if (state.phase === 'scenario') {
+      // シナリオ読み込み終了 → 医療面接（ブザー＋アナウンス）
+      enterPhase('interview', INTERVIEW_SEC, { beep: true, voice: 'IntStart' });
+    } else if (state.phase === 'interview') {
+      // 医療面接終了 → 教員FB（強調ブザー＋アナウンス）
+      enterPhase('feedback', FEEDBACK_SEC, { beep: 'long', voice: 'FbStart' });
+    } else if (state.phase === 'feedback') {
+      // 教員FB終了 → 予備時間（ブザー＋アナウンス）
+      enterPhase('buffer', BUFFER_SEC, { beep: true, voice: 'FbEnd' });
+    } else if (state.phase === 'buffer') {
+      // 予備終了 → 次セット or 終了
+      if (state.set >= TOTAL_SETS) {
+        state.phase = 'done';
+        state.running = false;
+        state.endAt = null;
+        state.remaining = 0;
+        chime();
+        render();
+      } else {
+        state.set += 1;
+        enterPhase('scenario', SCENARIO_SEC, { beep: true });
+      }
+    }
+  }
+
+  // --- ボタン動作 ---
+  function pauseToggle() {
+    if (state.phase === 'idle' || state.phase === 'done') return;
+    if (state.phase === 'scheduled') return; // 目標時刻が動かないためポーズ不可
+    if (state.running) {
+      state.remaining = Math.max(0, (state.endAt - Date.now()) / 1000);
+      state.running = false;
+      state.endAt = null;
+    } else {
+      state.endAt = Date.now() + state.remaining * 1000;
+      state.running = true;
+    }
+    render();
+  }
+
+  function reset() {
+    state.phase = 'idle';
+    state.set = 1;
+    state.remaining = 0;
+    state.endAt = null;
+    state.running = false;
+    state.scheduledTargetMs = null;
+    stopAllVoice();
+    render();
+  }
+
+  function jumpStart(phase) {
+    unlockAudio();
+    state.set = state.jumpSet;
+    state.scheduledTargetMs = null;
+    el.endBanner.classList.remove('show');
+    if (phase === 'scenario') {
+      enterPhase('scenario', SCENARIO_SEC, {}); // 途中スタートはブザーなし
+    } else if (phase === 'interview') {
+      enterPhase('interview', INTERVIEW_SEC, {});
+    } else if (phase === 'feedback') {
+      enterPhase('feedback', FEEDBACK_SEC, {});
+    }
+  }
+
+  // --- メインループ ---
+  function tick() {
+    if (!state.running) return;
+    const remain = (state.endAt - Date.now()) / 1000;
+
+    if (remain <= 0) {
+      state.remaining = 0;
+      state.running = false;
+      state.endAt = null;
+      onPhaseEnd();
+      return;
+    }
+    state.remaining = remain;
+
+    // 表示更新（active 行のみ）
+    const target =
+      state.phase === 'scenario'  ? el.timeScenario  :
+      state.phase === 'interview' ? el.timeInterview :
+      state.phase === 'feedback'  ? el.timeFeedback  :
+      state.phase === 'buffer'    ? el.timeBuffer    : null;
+    if (target) setTimeEl(target, remain);
+
+    // 警告色 toggle
+    const targetRow =
+      state.phase === 'scenario'  ? el.rowScenario  :
+      state.phase === 'interview' ? el.rowInterview :
+      state.phase === 'feedback'  ? el.rowFeedback  :
+      state.phase === 'buffer'    ? el.rowBuffer    : null;
+    if (targetRow) {
+      const want = remain <= WARNING_SECONDS;
+      const has = targetRow.classList.contains('warning');
+      if (want && !has) targetRow.classList.add('warning');
+      else if (!want && has) targetRow.classList.remove('warning');
+    }
+
+    if (state.phase === 'scheduled') updateScheduledBar();
+  }
+
+  // --- イベント ---
+  el.scheduledStartBtn.addEventListener('click', () => {
+    if (state.phase === 'idle') startSessionScheduled();
+  });
+  el.nowStartBtn.addEventListener('click', () => {
+    if (state.phase === 'idle') startSessionNow();
+  });
+  el.pauseBtn.addEventListener('click', pauseToggle);
+  el.resetBtn.addEventListener('click', () => {
+    if (state.phase !== 'idle' && state.phase !== 'done') {
+      if (!confirm('タイマーをリセットしますか？')) return;
+    }
+    reset();
+  });
+
+  // 途中スタート セット選択
+  document.querySelectorAll('.pill[data-set]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.pill[data-set]').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      state.jumpSet = parseInt(btn.dataset.set, 10) || 1;
+    });
+  });
+  // 途中スタート フェーズ選択
+  document.querySelectorAll('.pill[data-jump]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (state.phase !== 'idle' && state.phase !== 'done') {
+        if (!confirm('現在のタイマーを中止して、選択した位置からスタートしますか？')) return;
+      }
+      jumpStart(btn.dataset.jump);
+    });
+  });
+
+  // テスト用ボタン
+  document.querySelectorAll('.pill[data-test]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      unlockAudio();
+      const k = btn.dataset.test;
+      if (k === 'BEEP') beep();
+      else if (k === 'LONG') longBuzz();
+      else if (k === 'CHIME') chime();
+    });
+  });
+  document.querySelectorAll('.pill[data-voice]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      playVoice(btn.dataset.voice);
+    });
+  });
+  document.getElementById('clearLogBtn').addEventListener('click', () => {
+    const d = document.getElementById('debugLog');
+    if (d) d.textContent = '';
+  });
+
+  // --- Wake Lock（iPadスリープ防止） ---
+  let wakeLock = null;
+  async function manageWakeLock() {
+    if (state.running && !wakeLock && 'wakeLock' in navigator) {
+      try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+    } else if (!state.running && wakeLock) {
+      try { await wakeLock.release(); } catch(e) {}
+      wakeLock = null;
+    }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') manageWakeLock();
+  });
+
+  // --- 時計表示 ---
+  function updateClock() {
+    const n = new Date();
+    const hh = String(n.getHours()).padStart(2, '0');
+    const mm = String(n.getMinutes()).padStart(2, '0');
+    const ss = String(n.getSeconds()).padStart(2, '0');
+    el.clock.textContent = hh + ':' + mm + ':' + ss;
+  }
+
+  // --- 初期化 ---
+  // 開始時刻のデフォルト：書類どおり 13:30
+  (function initStartTime() {
+    scheduledTime.h = 13;
+    scheduledTime.m = 30;
+    requestAnimationFrame(() => {
+      wheelH.setValue(scheduledTime.h);
+      wheelM.setValue(scheduledTime.m);
+    });
+  })();
+
+  updateClock();
+  render();
+  // 音声ファイル事前読み込み
+  preloadVoiceAudio();
+  setInterval(() => { tick(); manageWakeLock(); }, 200);
+  setInterval(updateClock, 250);
+
+})();
+</script>
+</body>
+</html>
