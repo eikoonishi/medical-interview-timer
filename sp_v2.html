@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="医療面接タイマー β">
+<meta name="apple-mobile-web-app-title" content="医療面接タイマー v2">
 <meta name="theme-color" content="#ffffff">
-<title>東北大学医学部 医療面接タイマー（β）</title>
+<title>東北大学医学部 医療面接タイマー（version 2）</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -131,7 +131,7 @@
   .timer-row.active.warning .time { color: #d97706; }
   .timer-row.active.warning { border-color: #d97706; background: #fffaf0; }
 
-  /* β版：フィードバック中の控えめプログレスバー */
+  /* v2：フィードバック中の控えめプログレスバー */
   .fb-bar {
     display: none;
     width: 100%;
@@ -157,7 +157,7 @@
   .timer-row.fb-mode .label .sub { color: #64748b; font-weight: 500; }
   .timer-row.fb-mode .time { display: none; }
   .timer-row.fb-mode .fb-bar { display: block; }
-  /* β版ではFB行の警告色（オレンジ）は出さない */
+  /* v2ではFB行の警告色（オレンジ）は出さない */
   .timer-row.fb-mode.warning { border-color: #ddd; background: #fff; }
   .timer-row.fb-mode.warning .time { color: inherit; }
 
@@ -385,7 +385,7 @@
 <div class="container">
   <div class="clock" id="clock">--:--:--</div>
   <header>
-    <h1>東北大学医学部　医療面接タイマー<span style="font-size:0.55em;color:#666;font-weight:600;margin-left:8px;">（β / FBゆとり版）</span></h1>
+    <h1>東北大学医学部　医療面接タイマー<span style="font-size:0.55em;color:#666;font-weight:600;margin-left:8px;">（version 2）</span></h1>
     <div class="set-line">
       <span class="num" id="setNum">1</span> / 3 セット目
       <span class="phase idle" id="phaseTag">待機中</span>
@@ -470,7 +470,7 @@
   </details>
 
   <footer>
-    東北大学医学部 SP医療面接（β版） ／
+    東北大学医学部 SP医療面接（version 2） ／
     <a href="index.html" style="color:#666;text-decoration:none;border-bottom:1px dotted #999;">通常版へ →</a>
   </footer>
 </div>
@@ -786,7 +786,7 @@
     if (state.phase === 'interview') el.rowInterview.classList.add('active');
     else if (state.phase === 'feedback') {
       el.rowFeedback.classList.add('active');
-      // β版：フィードバック中はカウントダウンを隠してプログレスバーを表示
+      // v2：フィードバック中はカウントダウンを隠してプログレスバーを表示
       el.rowFeedback.classList.add('fb-mode');
       el.fbLabel.firstChild.textContent = 'フィードバック中';
       el.fbSub.textContent = 'ご自身のペースで';
@@ -935,7 +935,7 @@
         render();
       } else {
         state.set += 1;
-        // β版：FB→次セット準備の合図は SP6 に変更（SP3から差し替え）
+        // v2：FB→次セット準備の合図は SP6 に変更（SP3から差し替え）
         enterPhase('prep', PREP_NORMAL, { beep: true, sp: 'SP6' });
       }
     }
@@ -989,7 +989,7 @@
     if (!state.running) return;
     const remain = (state.endAt - Date.now()) / 1000;
 
-    // β版：FB中のSP2アナウンス（残り1分警告）は廃止
+    // v2：FB中のSP2アナウンス（残り1分警告）は廃止
     // 模擬患者から「カウントダウンされている感」が出るとの意見を反映
 
     // 時刻指定スタート：残り60秒を最初に下回ったら SP00 を流して prep へ遷移
@@ -1017,7 +1017,7 @@
       (state.phase === 'prep' || state.phase === 'scheduled') ? el.timePrep : null;
     if (target) setTimeEl(target, remain);
 
-    // β版：FB中はプログレスバーを滑らかに更新
+    // v2：FB中はプログレスバーを滑らかに更新
     if (state.phase === 'feedback') {
       const elapsed = FEEDBACK_SEC - remain;
       const pct = Math.max(0, Math.min(100, (elapsed / FEEDBACK_SEC) * 100));
