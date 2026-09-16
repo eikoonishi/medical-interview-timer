@@ -459,14 +459,24 @@ function initAudio(){
   });
 }
 // iOS の自動再生制限を解除（全要素を muted で play→pause）
+// ※ この pause は非同期に走るので、鳴らしている最中の音（__wanted）は絶対に触らない
+let audioUnlocked = false;
 function unlockAudio(){
+  if(audioUnlocked) return;
+  audioUnlocked = true;
   initAudio();
   Object.values(audios).forEach(a=>{
+    if(a.__wanted) return;
     const wasMuted = a.muted;
     a.muted = true;
+    const done = ()=>{
+      if(a.__wanted){ a.muted = wasMuted; return; }   // 解除中に再生指示が来た場合
+      try{ a.pause(); a.currentTime = 0; }catch(e){}
+      a.muted = wasMuted;
+    };
     const p = a.play();
-    if(p && p.then) p.then(()=>{ a.pause(); a.currentTime = 0; a.muted = wasMuted; }).catch(()=>{ a.muted = wasMuted; });
-    else { try{ a.pause(); a.currentTime = 0; }catch(e){} a.muted = wasMuted; }
+    if(p && p.then) p.then(done).catch(()=>{ a.muted = wasMuted; audioUnlocked = false; });
+    else done();
   });
 }
 // 「チーン」（録音素材 bell.mp3）
@@ -478,6 +488,8 @@ function playFile(f){
   initAudio();
   const a = audios[f];
   if(!a) return;
+  a.__wanted = true;                                   // 解除処理に止められないための目印
+  a.addEventListener("ended", ()=>{ a.__wanted = false; }, {once:true});
   try{ a.pause(); a.currentTime = 0; a.muted = false; a.volume = 1; a.play().catch(()=>{}); }catch(e){}
 }
 function announce(ev){
@@ -507,8 +519,8 @@ function seqStop(){
   if(seqTimer) clearTimeout(seqTimer);
   seqTimer = null;
   if(seqAudio && seqEnd) seqAudio.removeEventListener("ended", seqEnd);
-  CHECK_SEQ.forEach(([f])=>{ const a = audios[f]; if(a){ try{ a.pause(); a.currentTime = 0; }catch(e){} } });
-  const b = audios["bell"]; if(b){ try{ b.pause(); b.currentTime = 0; }catch(e){} }
+  CHECK_SEQ.forEach(([f])=>{ const a = audios[f]; if(a){ a.__wanted = false; try{ a.pause(); a.currentTime = 0; }catch(e){} } });
+  const b = audios["bell"]; if(b){ b.__wanted = false; try{ b.pause(); b.currentTime = 0; }catch(e){} }
   seqStatus(0);
 }
 function seqRun(i){
