@@ -77,11 +77,13 @@ body{
 .grid{
   flex:1 1 auto;
   display:grid;
-  grid-template-columns:1fr 1fr;
-  grid-template-rows:1.6fr 1fr;
+  grid-template-columns:1fr;
+  grid-template-rows:1fr 1fr;
   gap:12px;
   min-height:0;
 }
+.grid.one{grid-template-rows:1fr}
+.card.hide{display:none}
 .card{
   border:3px solid var(--line);
   border-radius:20px;
@@ -96,13 +98,15 @@ body{
   transition:border-color .2s, background .2s;
 }
 .card h2{
-  font-size:min(2.9vh,24px);
+  font-size:min(3.6vh,30px);
   font-weight:700;
   color:var(--dim);
   line-height:1.2;
   text-align:center;
   transition:color .2s;
+  margin-bottom:6px;
 }
+.grid.one .card h2{font-size:min(4.6vh,38px)}
 .card .clk{
   color:var(--off);
   line-height:1;
@@ -113,10 +117,10 @@ body{
   font-style:normal;
   font-weight:500;
 }
-.big .clk{font-size:min(19vh,13.6vw);font-weight:700}
-.big .clk i{font-size:min(8vh,5.8vw)}
-.small .clk{font-size:min(9.6vh,7.2vw);font-weight:700}
-.small .clk i{font-size:min(4.6vh,3.4vw)}
+.card .clk{font-size:min(25vh,21vw);font-weight:700}
+.card .clk i{font-size:min(10vh,8.4vw)}
+.grid.one .card .clk{font-size:min(34vh,26vw)}
+.grid.one .card .clk i{font-size:min(13.5vh,10.4vw)}
 
 .card.active{border-color:var(--on);background:#fff}
 .card.active h2{color:var(--text)}
@@ -200,7 +204,6 @@ select{max-width:100%}
 .btn.sm{font-size:14px;padding:9px 15px;min-height:42px;border-color:var(--line);background:#fff;color:var(--text)}
 .btn.sm:active{background:var(--panel)}
 .btnrow{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;align-items:center}
-#seqInfo{font-size:15px;font-weight:700;color:var(--warn)}
 .testgrid{display:flex;flex-wrap:wrap;gap:8px}
 .playing{border-color:var(--warn) !important;color:var(--warn) !important}
 
@@ -260,44 +263,32 @@ tr.now td{color:var(--warn);font-weight:700}
         <input type="time" id="anchorTime" value="10:00">
       </div>
       <div>
-        <button class="btn sm" id="btnNow">今から開始</button>
+        <button class="btn sm" id="btnNow">入室時刻に現在時刻を入れる</button>
       </div>
     </div>
     <div class="note">
-      通常は <b>第1G① / 10:00</b> のまま「タイマー開始」を押してください。<br>
-      途中から始めるときは、基準にする受験者を選んで入室時刻を入れると、そこを起点に全体の時刻表がスライドします。「今から開始」を押すと、選んだ受験者の入室が<b>1分後</b>になるようセットされます。
+      通常は <b>第1G① / 10:00</b> のまま、下の「タイマー開始」を押してください。<br>
+      途中から始めるときは、基準にする受験者を選んで入室時刻を入れると、そこを起点に全体の時刻表がスライドします。<b>「入室時刻に現在時刻を入れる」</b>を押すと、選んだ受験者の入室時刻が<b>いまの時刻の1分後</b>になり、すぐに始められます。
+    </div>
+    <div class="btnrow">
+      <button class="btn" id="btnStart">タイマー開始</button>
     </div>
   </div>
 
   <div class="box">
-    <h3>2. 音声確認（9:40〜）</h3>
-    <div class="btnrow" style="margin-top:0">
-      <button class="btn" id="btnSeq">音声確認を順番に流す（8件）</button>
-      <span id="seqInfo"></span>
-    </div>
-    <div class="note">
-      押すと <b>音声確認1〜8 が自動で順番に流れます</b>（1件ずつ、あいだに1.5秒）。途中で止めたいときはもう一度押してください。<br>
-      ♪の放送はベル（チーン）のあとにアナウンスが流れます。
-    </div>
-  </div>
-
-  <div class="box">
-    <h3>3. 個別の音声テスト</h3>
+    <h3>2. 音声テスト</h3>
     <div class="testgrid" id="testGrid"></div>
     <div class="note">
-      1つずつ確認したいとき、流し直したいときに使ってください。
+      1件ずつ確認できます。<b>♪</b>のついた放送は、ベル（チーン）のあとにアナウンスが流れます。<br>
+      当日の音声確認（9:40〜）も、音声確認1〜8を順番に押して流してください。
     </div>
   </div>
 
   <div class="box">
-    <h3>4. 進行表</h3>
+    <h3>3. 進行表</h3>
     <div class="btnrow" style="margin-top:0">
       <button class="btn ghost" id="btnSheet1">進行表を見る</button>
     </div>
-  </div>
-
-  <div class="btnrow">
-    <button class="btn" id="btnStart">タイマー開始</button>
   </div>
 
   <div class="box" style="margin-top:20px;background:var(--panel)">
@@ -326,22 +317,25 @@ tr.now td{color:var(--warn);font-weight:700}
     </div>
   </div>
 
-  <div class="grid">
-    <div class="card big" id="cInt">
+  <div class="grid" id="grid">
+    <div class="card" id="cInt">
       <h2>医療面接と身体診察　残り</h2>
       <div class="clk num"><span id="intM">12</span><i>分</i><span id="intS">00</span><i>秒</i></div>
     </div>
-    <div class="card big" id="cRep">
+    <div class="card" id="cRep">
       <h2>情報の整理・報告　残り</h2>
       <div class="clk num"><span id="repM">4</span><i>分</i><span id="repS">00</span><i>秒</i></div>
     </div>
-    <div class="card small" id="cEnter">
+    <div class="card" id="cEnter">
       <h2>次の受験者入室まで</h2>
       <div class="clk num"><span id="entM">0</span><i>分</i><span id="entS">00</span><i>秒</i></div>
     </div>
-    <div class="card small" id="cPre">
+    <div class="card" id="cPre">
       <h2>試験開始まで</h2>
       <div class="clk num"><span id="preM">0</span><i>分</i><span id="preS">00</span><i>秒</i></div>
+    </div>
+    <div class="card active hide" id="cDone">
+      <h2>本日の試験はすべて終了しました</h2>
     </div>
   </div>
 
@@ -501,50 +495,12 @@ function announce(ev){
   }
 }
 
-/* ---------- 音声確認（9:40〜）を順番に流す ---------- */
-// [ファイル, ベルあり]  ※Excelの並び順
-const CHECK_SEQ = [
-  ["check1",false],["check2",true],["check3",true],["check4",false],
-  ["check5",false],["check6",false],["check7",true],["check8",false]
-];
-const SEQ_GAP = 1500;        // 1件ごとの間(ms)
-let seqRunning = false, seqTimer = null, seqEnd = null, seqAudio = null;
-
-function seqStatus(i){
-  $("seqInfo").textContent = seqRunning ? `音声確認 ${i+1} / ${CHECK_SEQ.length} を再生中…` : "";
-  $("btnSeq").textContent  = seqRunning ? "停止" : "音声確認を順番に流す（8件）";
-}
-function seqStop(){
-  seqRunning = false;
-  if(seqTimer) clearTimeout(seqTimer);
-  seqTimer = null;
-  if(seqAudio && seqEnd) seqAudio.removeEventListener("ended", seqEnd);
-  CHECK_SEQ.forEach(([f])=>{ const a = audios[f]; if(a){ a.__wanted = false; try{ a.pause(); a.currentTime = 0; }catch(e){} } });
-  const b = audios["bell"]; if(b){ b.__wanted = false; try{ b.pause(); b.currentTime = 0; }catch(e){} }
-  seqStatus(0);
-}
-function seqRun(i){
-  if(!seqRunning) return;
-  if(i >= CHECK_SEQ.length){ seqStop(); return; }
-  const [f, withBell] = CHECK_SEQ[i];
-  seqStatus(i);
-  const a = audios[f];
-  if(!a){ seqTimer = setTimeout(()=>seqRun(i+1), SEQ_GAP); return; }
-  seqAudio = a;
-  seqEnd = ()=>{
-    a.removeEventListener("ended", seqEnd);
-    if(!seqRunning) return;
-    seqTimer = setTimeout(()=>seqRun(i+1), SEQ_GAP);
-  };
-  a.addEventListener("ended", seqEnd);
-  if(withBell){ bell(); setTimeout(()=>{ if(seqRunning) playFile(f); }, BELL_DELAY); }
-  else { playFile(f); }
-}
-function seqToggle(){
-  unlockAudio();
-  if(seqRunning){ seqStop(); return; }
-  seqRunning = true;
-  seqRun(0);
+// 個別テスト用：鳴っているものをすべて止める
+function stopAll(){
+  Object.values(audios).forEach(a=>{
+    a.__wanted = false;
+    try{ a.pause(); a.currentTime = 0; }catch(e){}
+  });
 }
 
 /* =========================================================
@@ -692,39 +648,44 @@ function update(){
   // 現在の枠が終了済みなら、注目は次の枠
   const inSlot = cur && nowMs < cur.R;
 
+  // 画面に出すのは「いま必要なものだけ」。試験中は入室・開始のカウントダウンを出さない。
   let intSec = D_INT, repSec = D_REP, entSec = 0, preSec = 0;
   let sInt = "off", sRep = "off", sEnt = "off", sPre = "off";
+  let show = [];
 
   if(inSlot){
-    if(nowMs < cur.S){                       // 入室〜開始
+    if(nowMs < cur.S){                       // 入室〜試験開始（1分）
       preSec = (cur.S - nowMs)/1000;
-      sPre = "active";
-      intSec = D_INT; repSec = D_REP;
-      if(nextSlot) entSec = (nextSlot.E - nowMs)/1000;
-    }else if(nowMs < cur.I){                 // 医療面接・身体診察
+      sPre = preSec <= 60 ? "warn" : "active";
+      show = ["cPre"];
+    }else if(nowMs < cur.I){                 // 医療面接・身体診察（12分）
       intSec = (cur.I - nowMs)/1000;
       sInt = intSec <= 60 ? "warn" : "active";
       repSec = D_REP;
-      if(nextSlot){ entSec = (nextSlot.E - nowMs)/1000; preSec = (nextSlot.S - nowMs)/1000; }
-    }else{                                   // 情報の整理・報告
-      intSec = 0;
+      show = ["cInt","cRep"];
+    }else{                                   // 情報の整理・報告（4分）
       repSec = (cur.R - nowMs)/1000;
       sRep = repSec <= 60 ? "warn" : "active";
-      if(nextSlot){ entSec = (nextSlot.E - nowMs)/1000; preSec = (nextSlot.S - nowMs)/1000; }
+      show = ["cRep"];
     }
-  }else if(nextSlot){                        // 枠と枠のあいだ／開始前
+  }else if(nextSlot){                        // 枠と枠のあいだ／開始前／休憩
     entSec = (nextSlot.E - nowMs)/1000;
     preSec = (nextSlot.S - nowMs)/1000;
     sEnt = entSec <= 60 ? "warn" : "active";
-    intSec = D_INT; repSec = D_REP;
+    show = ["cEnter","cPre"];
   }else{                                     // 全日程終了
-    intSec = 0; repSec = 0;
+    show = ["cDone"];
   }
 
   setClock("int", intSec); setClock("rep", repSec);
   setClock("ent", entSec); setClock("pre", preSec);
   setCard("cInt", sInt); setCard("cRep", sRep);
   setCard("cEnter", sEnt); setCard("cPre", sPre);
+
+  ["cInt","cRep","cEnter","cPre","cDone"].forEach(id=>{
+    $(id).classList.toggle("hide", !show.includes(id));
+  });
+  $("grid").classList.toggle("one", show.length === 1);
 
   if($("sheet").classList.contains("show")) markSheet();
 }
@@ -754,7 +715,6 @@ async function requestWakeLock(){
 }
 function start(){
   unlockAudio();
-  if(seqRunning) seqStop();
   if(!buildSchedule()){ alert("実施日と入室時刻を入力してください。"); return; }
   // 現在時刻より前の放送は「済み」にする（途中から開始しても一気に鳴らない）
   fired.clear();
@@ -798,8 +758,7 @@ function init(){
     b.textContent = label;
     b.onclick = ()=>{
       unlockAudio();
-      if(seqRunning) seqStop();
-      if(file === "__bell"){ bell(); }
+          if(file === "__bell"){ bell(); }
       else if(label.includes("♪")){ bell(); setTimeout(()=>playFile(file), BELL_DELAY); }
       else { playFile(file); }
       b.classList.add("playing");
@@ -810,7 +769,6 @@ function init(){
 
   $("btnStart").onclick = start;
   $("btnNow").onclick   = setNowAnchor;
-  $("btnSeq").onclick   = seqToggle;
   $("btnSetup").onclick = showSetup;
   $("btnSheet1").onclick = ()=>{ if(!sched.length) buildSchedule(); renderSheet(); $("sheet").classList.add("show"); jumpToNow(); };
   $("btnSheet2").onclick = ()=>{ $("sheet").classList.add("show"); jumpToNow(); };
