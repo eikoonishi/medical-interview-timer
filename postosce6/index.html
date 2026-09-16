@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>6年次 臨床実習後OSCE タイマー</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -160,7 +163,15 @@ body{
 #screenSetup.show{display:block}
 .wrap{max-width:900px;margin:0 auto;padding:22px 20px 60px}
 h1{font-size:26px;font-weight:700;margin-bottom:4px}
-.sub{color:var(--dim);font-size:14px;margin-bottom:20px}
+.sub{color:var(--dim);font-size:14px;margin-bottom:12px}
+.statenote{
+  font-size:15px;
+  font-weight:700;
+  color:var(--warn);
+  margin-bottom:16px;
+  min-height:22px;
+}
+#verLabel{font-size:12px;color:#9aa1a9}
 .box{
   border:2px solid var(--line);
   border-radius:16px;
@@ -242,7 +253,8 @@ tr.now td{color:var(--warn);font-weight:700}
 <div id="screenSetup" class="show">
 <div class="wrap">
   <h1>6年次 臨床実習後OSCE タイマー</h1>
-  <div class="sub">東北大学医学部　医療面接・身体診察／情報の整理・報告</div>
+  <div class="sub">東北大学医学部　医療面接・身体診察／情報の整理・報告　<span id="verLabel"></span></div>
+  <div id="stateNote" class="statenote"></div>
 
   <div class="box">
     <h3>1. 開始時刻の設定</h3>
@@ -294,7 +306,8 @@ tr.now td{color:var(--warn);font-weight:700}
       ・iPadの「設定 → 画面表示と明るさ → 自動ロック」を<b>「なし」</b>にしてください。画面が消えると放送が止まります。<br>
       ・音量を最大にし、外部スピーカーに接続されているか確認してください。<br>
       ・「タイマー開始」を押した時点で音声が有効になります。必ず一度押してください。<br>
-      ・開始後もこの設定画面には戻れます（画面右下の「設定」）。
+      ・<b>このタイマーを開いたタブは1つだけ</b>にしてください。古いタブが残っていると、そちらからも放送が流れます。<br>
+      ・画面右下の「設定」を押すと<b>タイマーは停止します</b>。設定を変えたら、もう一度「タイマー開始」を押してください。
     </div>
   </div>
 </div>
@@ -362,6 +375,9 @@ tr.now td{color:var(--warn);font-weight:700}
    6年次 臨床実習後OSCE タイマー
    時刻表は「2026_6年OSCEタイマーClaude.xlsx」に準拠
    ========================================================= */
+
+// 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
+const VERSION = "2026-09-16 g";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -441,7 +457,7 @@ let wakeLock = null;
 function initAudio(){
   ALL_FILES.forEach(f=>{
     if(audios[f]) return;
-    const a = new Audio(`sounds/${f}.mp3`);
+    const a = new Audio(`sounds/${f}.mp3?v=${encodeURIComponent(VERSION)}`);
     a.preload = "auto";
     audios[f] = a;
   });
@@ -738,6 +754,11 @@ function showTimer(){
   $("screenTimer").classList.add("show");
 }
 function showSetup(){
+  // 設定に戻る＝タイマーを止める（止めないと古い時刻表の放送が鳴り続ける）
+  if(armed && !confirm("タイマーを停止して設定画面に戻ります。よろしいですか？")) return;
+  armed = false;
+  stopAll();
+  $("stateNote").textContent = "タイマーは停止中です。設定を確認して「タイマー開始」を押してください。";
   $("screenTimer").classList.remove("show");
   $("screenSetup").classList.add("show");
 }
@@ -762,6 +783,7 @@ function start(){
   const now = Date.now();
   sched.forEach(ev=>{ if(ev.ms <= now) fired.add(ev.ms + "|" + ev.kind + "|" + ev.name); });
   armed = true;
+  $("stateNote").textContent = "";
   renderSheet();
   requestWakeLock();
   showTimer();
@@ -780,6 +802,7 @@ function setNowAnchor(){
 function init(){
   const d = new Date();
   $("runDate").value = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  $("verLabel").textContent = `版 ${VERSION}`;
 
   const sel = $("anchorSlot");
   SLOTS.forEach((s,i)=>{
