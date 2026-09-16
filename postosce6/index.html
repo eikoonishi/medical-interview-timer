@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>6年次 臨床実習後OSCE タイマー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ffffff;
+  --text:#000000;
+  --dim:#6b7280;
+  --line:#e5e7eb;
+  --panel:#f7f8fa;
+  --warn:#d97706;
+  --on:#000000;
+  --off:#a3aab3;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Noto Sans JP",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  font-weight:500;
+  overflow:hidden;
+  -webkit-text-size-adjust:100%;
+}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";letter-spacing:0}
+
+/* ===== タイマー画面 ===== */
+#screenTimer{
+  display:none;
+  height:100vh;
+  height:100dvh;
+  flex-direction:column;
+  padding:10px 14px 8px;
+  gap:10px;
+}
+#screenTimer.show{display:flex}
+
+.top{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  border-bottom:2px solid var(--line);
+  padding-bottom:8px;
+  flex:0 0 auto;
+}
+.top .cap{
+  font-size:min(1.9vh,15px);
+  color:var(--dim);
+  font-weight:500;
+  display:block;
+  line-height:1.2;
+}
+.nowv{
+  font-size:min(6.4vh,52px);
+  font-weight:700;
+  line-height:1.05;
+  display:block;
+}
+.top .spacer{flex:1}
+.statv{
+  font-size:min(6.4vh,52px);
+  font-weight:700;
+  line-height:1.05;
+  display:block;
+  text-align:right;
+}
+.statv.rest{color:var(--warn)}
+
+.grid{
+  flex:1 1 auto;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:1.6fr 1fr;
+  gap:12px;
+  min-height:0;
+}
+.card{
+  border:3px solid var(--line);
+  border-radius:20px;
+  padding:6px 12px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:0;
+  min-height:0;
+  background:#fff;
+  transition:border-color .2s, background .2s;
+}
+.card h2{
+  font-size:min(2.9vh,24px);
+  font-weight:700;
+  color:var(--dim);
+  line-height:1.2;
+  text-align:center;
+  transition:color .2s;
+}
+.card .clk{
+  color:var(--off);
+  line-height:1;
+  white-space:nowrap;
+  transition:color .2s;
+}
+.card .clk i{
+  font-style:normal;
+  font-weight:500;
+}
+.big .clk{font-size:min(19vh,13.6vw);font-weight:700}
+.big .clk i{font-size:min(8vh,5.8vw)}
+.small .clk{font-size:min(9.6vh,7.2vw);font-weight:700}
+.small .clk i{font-size:min(4.6vh,3.4vw)}
+
+.card.active{border-color:var(--on);background:#fff}
+.card.active h2{color:var(--text)}
+.card.active .clk{color:var(--text)}
+.card.warn{border-color:var(--warn)}
+.card.warn h2{color:var(--warn)}
+.card.warn .clk{color:var(--warn)}
+
+.bottom{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:min(1.9vh,14px);
+  color:var(--dim);
+}
+.bottom .spacer{flex:1}
+.mini{
+  border:2px solid var(--line);
+  background:#fff;
+  color:var(--dim);
+  border-radius:12px;
+  padding:7px 14px;
+  font-size:min(2vh,15px);
+  font-weight:700;
+  font-family:inherit;
+  cursor:pointer;
+}
+.mini:active{background:var(--panel)}
+#nextUp{font-weight:700;color:var(--text);font-size:min(2.2vh,16px)}
+
+/* ===== 設定画面 ===== */
+#screenSetup{
+  display:none;
+  height:100vh;
+  height:100dvh;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+#screenSetup.show{display:block}
+.wrap{max-width:900px;margin:0 auto;padding:22px 20px 60px}
+h1{font-size:26px;font-weight:700;margin-bottom:4px}
+.sub{color:var(--dim);font-size:14px;margin-bottom:20px}
+.box{
+  border:2px solid var(--line);
+  border-radius:16px;
+  padding:18px;
+  margin-bottom:16px;
+  background:#fff;
+}
+.box h3{font-size:17px;font-weight:700;margin-bottom:12px}
+.box .note{font-size:13px;color:var(--dim);line-height:1.7;margin-top:10px}
+.field{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end}
+.field label{display:block;font-size:13px;color:var(--dim);margin-bottom:5px;font-weight:500}
+input[type=date],input[type=time],select{
+  font-family:inherit;
+  font-size:19px;
+  font-weight:700;
+  padding:9px 12px;
+  border:2px solid var(--line);
+  border-radius:11px;
+  background:#fff;
+  color:var(--text);
+  min-height:46px;
+}
+select{max-width:100%}
+.btn{
+  font-family:inherit;
+  font-size:17px;
+  font-weight:700;
+  padding:13px 26px;
+  border-radius:13px;
+  border:2px solid var(--text);
+  background:var(--text);
+  color:#fff;
+  cursor:pointer;
+  min-height:50px;
+}
+.btn:active{opacity:.75}
+.btn.ghost{background:#fff;color:var(--text)}
+.btn.sm{font-size:14px;padding:9px 15px;min-height:42px;border-color:var(--line);background:#fff;color:var(--text)}
+.btn.sm:active{background:var(--panel)}
+.btnrow{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.testgrid{display:flex;flex-wrap:wrap;gap:8px}
+.playing{border-color:var(--warn) !important;color:var(--warn) !important}
+
+/* ===== 進行表 ===== */
+#sheet{
+  display:none;
+  position:fixed;
+  inset:0;
+  background:#fff;
+  z-index:50;
+  flex-direction:column;
+}
+#sheet.show{display:flex}
+.sheethead{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 16px;
+  border-bottom:2px solid var(--line);
+  flex:0 0 auto;
+}
+.sheethead h3{font-size:19px;font-weight:700}
+.sheethead .spacer{flex:1}
+.sheetbody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:var(--panel);font-weight:700;position:sticky;top:0;font-size:13px;color:var(--dim)}
+td.t{white-space:nowrap;font-weight:700;font-variant-numeric:tabular-nums;width:88px}
+td.g{white-space:nowrap;font-weight:700;width:76px}
+td.b{text-align:center;width:40px;font-size:17px}
+tr.done{color:#b6bcc4}
+tr.now{background:#fff7ed;outline:2px solid var(--warn);outline-offset:-2px}
+tr.now td{color:var(--warn);font-weight:700}
+</style>
+</head>
+<body>
+
+<!-- ============ 設定画面 ============ -->
+<div id="screenSetup" class="show">
+<div class="wrap">
+  <h1>6年次 臨床実習後OSCE タイマー</h1>
+  <div class="sub">東北大学医学部　医療面接・身体診察／情報の整理・報告</div>
+
+  <div class="box">
+    <h3>1. 開始時刻の設定</h3>
+    <div class="field">
+      <div>
+        <label>実施日</label>
+        <input type="date" id="runDate">
+      </div>
+      <div>
+        <label>基準にする受験者</label>
+        <select id="anchorSlot"></select>
+      </div>
+      <div>
+        <label>その受験者の入室時刻</label>
+        <input type="time" id="anchorTime" value="10:00">
+      </div>
+      <div>
+        <button class="btn sm" id="btnNow">今から開始</button>
+      </div>
+    </div>
+    <div class="note">
+      通常は <b>第1G① / 10:00</b> のまま「タイマー開始」を押してください。<br>
+      途中から始めるときは、基準にする受験者を選んで入室時刻を入れると、そこを起点に全体の時刻表がスライドします。「今から開始」を押すと、選んだ受験者の入室が<b>1分後</b>になるようセットされます。
+    </div>
+  </div>
+
+  <div class="box">
+    <h3>2. 音声テスト</h3>
+    <div class="testgrid" id="testGrid"></div>
+    <div class="note">
+      当日の音声確認（9:40〜）は、上のボタンを順番に押して流してください。<br>
+      ♪の放送はベル（チーン）のあとにアナウンスが流れます。
+    </div>
+  </div>
+
+  <div class="box">
+    <h3>3. 進行表</h3>
+    <div class="btnrow" style="margin-top:0">
+      <button class="btn ghost" id="btnSheet1">進行表を見る</button>
+    </div>
+  </div>
+
+  <div class="btnrow">
+    <button class="btn" id="btnStart">タイマー開始</button>
+  </div>
+
+  <div class="box" style="margin-top:20px;background:var(--panel)">
+    <h3>当日の注意</h3>
+    <div class="note" style="margin-top:0">
+      ・iPadの「設定 → 画面表示と明るさ → 自動ロック」を<b>「なし」</b>にしてください。画面が消えると放送が止まります。<br>
+      ・音量を最大にし、外部スピーカーに接続されているか確認してください。<br>
+      ・「タイマー開始」を押した時点で音声が有効になります。必ず一度押してください。<br>
+      ・開始後もこの設定画面には戻れます（画面右下の「設定」）。
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============ タイマー画面 ============ -->
+<div id="screenTimer">
+  <div class="top">
+    <div>
+      <span class="cap">現在時刻</span>
+      <span class="nowv num" id="nowv">--:--:--</span>
+    </div>
+    <div class="spacer"></div>
+    <div>
+      <span class="cap" style="text-align:right">進行状況</span>
+      <span class="statv" id="statv">待機中</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card big" id="cInt">
+      <h2>医療面接と身体診察　残り</h2>
+      <div class="clk num"><span id="intM">12</span><i>分</i><span id="intS">00</span><i>秒</i></div>
+    </div>
+    <div class="card big" id="cRep">
+      <h2>情報の整理・報告　残り</h2>
+      <div class="clk num"><span id="repM">4</span><i>分</i><span id="repS">00</span><i>秒</i></div>
+    </div>
+    <div class="card small" id="cEnter">
+      <h2>次の受験者入室まで</h2>
+      <div class="clk num"><span id="entM">0</span><i>分</i><span id="entS">00</span><i>秒</i></div>
+    </div>
+    <div class="card small" id="cPre">
+      <h2>試験開始まで</h2>
+      <div class="clk num"><span id="preM">0</span><i>分</i><span id="preS">00</span><i>秒</i></div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <span>次の放送：</span><span id="nextUp" class="num">—</span>
+    <span class="spacer"></span>
+    <button class="mini" id="btnSheet2">進行表</button>
+    <button class="mini" id="btnSetup">設定</button>
+  </div>
+</div>
+
+<!-- ============ 進行表 ============ -->
+<div id="sheet">
+  <div class="sheethead">
+    <h3>進行表</h3>
+    <span class="spacer"></span>
+    <button class="mini" id="btnJump">現在位置へ</button>
+    <button class="mini" id="btnSheetClose">閉じる</button>
+  </div>
+  <div class="sheetbody">
+    <table>
+      <thead><tr><th>時刻</th><th>受験者</th><th>ベル</th><th>アナウンス</th></tr></thead>
+      <tbody id="sheetBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   6年次 臨床実習後OSCE タイマー
+   時刻表は「2026_6年OSCEタイマーClaude.xlsx」に準拠
+   ========================================================= */
+
+const $ = id => document.getElementById(id);
+const pad2 = n => String(n).padStart(2,"0");
+const toSec = t => { const p = t.split(":").map(Number); return p[0]*3600 + p[1]*60 + (p[2]||0); };
+const fmtHMS = s => { s=Math.round(s); return `${pad2(Math.floor(s/3600)%24)}:${pad2(Math.floor(s/60)%60)}:${pad2(s%60)}`; };
+const fmtHM  = s => { s=Math.round(s); return `${pad2(Math.floor(s/3600)%24)}:${pad2(Math.floor(s/60)%60)}`; };
+
+/* ---------- 受験者枠（入室時刻は基準10:00のときの値） ---------- */
+const SLOTS = [
+  {n:"第1G①", e:"10:00", pre:true,  end:"end"},
+  {n:"第1G②", e:"10:18", pre:false, end:"end"},
+  {n:"第2G①", e:"10:37", pre:true,  end:"end"},
+  {n:"第2G②", e:"10:55", pre:false, end:"end_break"},
+  {n:"第3G①", e:"11:24", pre:true,  end:"end"},
+  {n:"第3G②", e:"11:42", pre:false, end:"end"},
+  {n:"第4G①", e:"12:01", pre:true,  end:"end"},
+  {n:"第4G②", e:"12:19", pre:false, end:"am_end"},
+  {n:"第5G①", e:"13:40", pre:true,  end:"end"},
+  {n:"第5G②", e:"13:58", pre:false, end:"end"},
+  {n:"第6G①", e:"14:17", pre:true,  end:"end"},
+  {n:"第6G②", e:"14:35", pre:false, end:"end_break"},
+  {n:"第7G①", e:"15:04", pre:true,  end:"end"},
+  {n:"第7G②", e:"15:22", pre:false, end:"end"},
+  {n:"第8G①", e:"15:41", pre:true,  end:"end"},
+  {n:"第8G②", e:"15:59", pre:false, end:"all_end"}
+];
+
+/* ---------- 枠に属さない放送 ---------- */
+const FIXED = [
+  {t:"09:40", file:null,  bell:false, msg:"（会場の音声確認：設定画面のボタンで再生）", st:"音声確認"},
+  {t:"09:45", file:"pre1", bell:false, msg:"評価者の先生方は、試験室に電子機器の持ち込みがないか今一度、ご確認ください。", st:"開始前"},
+  {t:"09:50", file:"pre2", bell:false, msg:"受験者入室10分前です。"},
+  {t:"09:55", file:"pre3", bell:false, msg:"受験者入室5分前です。評価者・模擬患者は準備してください。"},
+  {t:"11:21", file:"min3", bell:false, msg:"受験者入室3分前です。評価者・模擬患者は試験室へ戻り、準備してください。"},
+  {t:"12:10", file:null,  bell:false, msg:"（午後グループ受付開始／臨床中講堂　※放送なし）"},
+  {t:"13:35", file:"pre3", bell:false, msg:"受験者入室5分前です。評価者・模擬患者は準備してください。"},
+  {t:"15:01", file:"min3", bell:false, msg:"受験者入室3分前です。評価者・模擬患者は試験室へ戻り、準備してください。"}
+];
+
+/* ---------- 終了アナウンスの文面 ---------- */
+const END_MSG = {
+  end:       "終了です。退室してください。評価者は、評価表の確認を行ってください。",
+  end_break: "終了です。退室してください。評価者は、評価表の確認を行ってください。これより10分間の休憩です。",
+  am_end:    "終了です。退室してください。評価者は評価表の確認を行ってください。以上で、前半の試験は終了です。（昼休憩・午後は13時40分開始）",
+  all_end:   "終了です。退室してください。評価者は、評価表の確認を行ってください。以上で、すべての試験は終了です。本日は、ご協力ありがとうございました。"
+};
+
+/* ---------- 音声テストボタンの並び ---------- */
+const TESTS = [
+  ["ベル（チーン）","__bell"],
+  ["音声確認1","check1"],["音声確認2 ♪","check2"],["音声確認3 ♪","check3"],["音声確認4","check4"],
+  ["音声確認5","check5"],["音声確認6","check6"],["音声確認7 ♪","check7"],["音声確認8","check8"],
+  ["開始前1","pre1"],["開始前2","pre2"],["開始前3","pre3"],
+  ["1分前","min1"],["3分前","min3"],["入室 ♪","enter"],["開始 ♪","start"],
+  ["6分経過","min6"],["12分経過","min12"],["終了 ♪","end"],["終了＋休憩 ♪","end_break"],
+  ["前半終了 ♪","am_end"],["全体終了 ♪","all_end"]
+];
+const ALL_FILES = ["check1","check2","check3","check4","check5","check6","check7","check8",
+  "pre1","pre2","pre3","min1","min3","enter","start","min6","min12","end","end_break","am_end","all_end"];
+
+const BASE_ANCHOR = toSec("10:00");   // SLOTS の基準
+const D_START = 60, D_INT = 12*60, D_REP = 4*60;   // 入室→開始1分 / 面接12分 / 報告4分
+const BELL_DELAY = 900;               // ベル→アナウンスの間(ms)
+
+/* ---------- 状態 ---------- */
+let sched = [];       // {ms, name, bell, file, msg, st, kind}
+let slots = [];       // {n, E, S, I, R}  (ms)
+let armed = false;
+let fired = new Set();
+let audios = {};
+let actx = null;
+let tick = null;
+let wakeLock = null;
+
+/* =========================================================
+   音声
+   ========================================================= */
+function initAudio(){
+  ALL_FILES.forEach(f=>{
+    if(audios[f]) return;
+    const a = new Audio(`sounds/${f}.mp3`);
+    a.preload = "auto";
+    audios[f] = a;
+  });
+}
+// iOS の自動再生制限を解除（全要素を muted で play→pause）
+function unlockAudio(){
+  initAudio();
+  Object.values(audios).forEach(a=>{
+    const wasMuted = a.muted;
+    a.muted = true;
+    const p = a.play();
+    if(p && p.then) p.then(()=>{ a.pause(); a.currentTime = 0; a.muted = wasMuted; }).catch(()=>{ a.muted = wasMuted; });
+    else { try{ a.pause(); a.currentTime = 0; }catch(e){} a.muted = wasMuted; }
+  });
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state === "suspended") actx.resume();
+  }catch(e){}
+}
+// 「チーン」（倍音を重ねた鈴の音）
+function bell(){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state === "suspended") actx.resume();
+    const t0 = actx.currentTime + 0.02;
+    const master = actx.createGain();
+    master.gain.value = 0.9;
+    master.connect(actx.destination);
+    // [周波数, 音量, 減衰秒]
+    [[1046.5,0.55,2.2],[2093,0.30,1.5],[2840,0.18,1.0],[4186,0.10,0.6]].forEach(([f,g,d])=>{
+      const o = actx.createOscillator();
+      const gn = actx.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(f, t0);
+      gn.gain.setValueAtTime(0.0001, t0);
+      gn.gain.exponentialRampToValueAtTime(g, t0+0.006);
+      gn.gain.exponentialRampToValueAtTime(0.0001, t0+d);
+      o.connect(gn).connect(master);
+      o.start(t0);
+      o.stop(t0+d+0.05);
+    });
+  }catch(e){}
+}
+function playFile(f){
+  if(!f) return;
+  initAudio();
+  const a = audios[f];
+  if(!a) return;
+  try{ a.pause(); a.currentTime = 0; a.muted = false; a.volume = 1; a.play().catch(()=>{}); }catch(e){}
+}
+function announce(ev){
+  if(ev.bell){
+    bell();
+    if(ev.file) setTimeout(()=>playFile(ev.file), BELL_DELAY);
+  }else{
+    playFile(ev.file);
+  }
+}
+
+/* =========================================================
+   スケジュール生成
+   ========================================================= */
+function buildSchedule(){
+  const dateStr = $("runDate").value;
+  const anchorIdx = parseInt($("anchorSlot").value, 10);
+  const anchorTime = $("anchorTime").value;
+  if(!dateStr || !anchorTime || isNaN(anchorIdx)) return false;
+
+  // 基準枠の入室時刻を合わせるためのシフト量（秒）
+  const shift = toSec(anchorTime) - toSec(SLOTS[anchorIdx].e);
+
+  const d = new Date(dateStr + "T00:00:00");
+  const dayMs = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0,0).getTime();
+  const at = sec => dayMs + (sec + shift) * 1000;
+
+  sched = [];
+  slots = [];
+
+  FIXED.forEach(f=>{
+    sched.push({ms:at(toSec(f.t)), name:"", bell:f.bell, file:f.file, msg:f.msg, st:f.st||null, kind:"fixed"});
+  });
+
+  SLOTS.forEach((s, i)=>{
+    const e = toSec(s.e);
+    const st = e + D_START;
+    const iv = st + D_INT;
+    const rv = st + D_INT + D_REP;
+    const next = SLOTS[i+1];
+
+    if(s.pre){
+      sched.push({ms:at(e-60), name:s.n, bell:false, file:"min1",
+        msg:"入室1分前です。", st:`${s.n} 入室前`, kind:"pre"});
+    }
+    sched.push({ms:at(e), name:s.n, bell:true, file:"enter",
+      msg:"入室してください。", st:`${s.n} 入室`, kind:"enter"});
+    sched.push({ms:at(st), name:s.n, bell:true, file:"start",
+      msg:"試験を開始してください。", st:`${s.n} 試験中`, kind:"start"});
+    sched.push({ms:at(st+6*60), name:s.n, bell:false, file:"min6",
+      msg:"6分経過しました。", kind:"m6"});
+    sched.push({ms:at(iv), name:s.n, bell:false, file:"min12",
+      msg:"12分が経過しました。医療面接と身体診察は終了です。模擬患者は廊下に移動してください。", kind:"m12"});
+
+    // 終了 → 進行状況は「次の受験者 入室前」／休憩／昼休憩／全日程終了
+    let endSt;
+    if(s.end === "end_break")      endSt = "休憩";
+    else if(s.end === "am_end")    endSt = "昼休憩";
+    else if(s.end === "all_end")   endSt = "全日程終了";
+    else                           endSt = next ? `${next.n} 入室前` : "全日程終了";
+    sched.push({ms:at(rv), name:s.n, bell:true, file:s.end,
+      msg:END_MSG[s.end], st:endSt, kind:"end"});
+
+    slots.push({n:s.n, E:at(e), S:at(st), I:at(iv), R:at(rv)});
+  });
+
+  sched.sort((a,b)=> a.ms - b.ms);
+  return true;
+}
+
+/* =========================================================
+   進行表
+   ========================================================= */
+function renderSheet(){
+  const tb = $("sheetBody");
+  tb.innerHTML = "";
+  sched.forEach((ev, i)=>{
+    const tr = document.createElement("tr");
+    tr.dataset.i = i;
+    tr.innerHTML =
+      `<td class="t">${fmtHMS(new Date(ev.ms).getHours()*3600 + new Date(ev.ms).getMinutes()*60 + new Date(ev.ms).getSeconds())}</td>` +
+      `<td class="g">${ev.name||""}</td>` +
+      `<td class="b">${ev.bell ? "♪" : ""}</td>` +
+      `<td>${ev.msg||""}</td>`;
+    tb.appendChild(tr);
+  });
+  markSheet();
+}
+function markSheet(){
+  const now = Date.now();
+  let curIdx = -1;
+  for(let i=0;i<sched.length;i++){ if(sched[i].ms <= now) curIdx = i; else break; }
+  [...$("sheetBody").children].forEach((tr, i)=>{
+    tr.classList.toggle("done", i < curIdx);
+    tr.classList.toggle("now", i === curIdx);
+  });
+}
+function jumpToNow(){
+  const el = $("sheetBody").querySelector("tr.now") || $("sheetBody").querySelector("tr");
+  if(el) el.scrollIntoView({block:"center"});
+}
+
+/* =========================================================
+   画面更新
+   ========================================================= */
+function setClock(pfx, sec){
+  const s = Math.max(0, Math.ceil(sec));
+  $(pfx+"M").textContent = Math.floor(s/60);
+  $(pfx+"S").textContent = pad2(s%60);
+}
+function setCard(id, state){   // state: "active" | "warn" | "off"
+  const el = $(id);
+  el.classList.toggle("active", state==="active" || state==="warn");
+  el.classList.toggle("warn",   state==="warn");
+}
+
+function update(){
+  const now = new Date();
+  const nowMs = now.getTime();
+  $("nowv").textContent = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+  if(!armed || !sched.length) return;
+
+  /* --- 放送 --- */
+  for(const ev of sched){
+    if(ev.ms > nowMs) break;
+    if(fired.has(ev.ms + "|" + ev.kind + "|" + ev.name)) continue;
+    fired.add(ev.ms + "|" + ev.kind + "|" + ev.name);
+    if(nowMs - ev.ms < 15000) announce(ev);   // 15秒以上過ぎた放送は流さない
+  }
+
+  /* --- 進行状況 --- */
+  let st = "待機中";
+  for(const ev of sched){
+    if(ev.ms > nowMs) break;
+    if(ev.st) st = ev.st;
+  }
+  const sv = $("statv");
+  sv.textContent = st;
+  sv.classList.toggle("rest", st==="休憩" || st==="昼休憩");
+
+  /* --- 次の放送 --- */
+  const nx = sched.find(ev => ev.ms > nowMs && ev.file);
+  $("nextUp").textContent = nx
+    ? `${fmtHM(new Date(nx.ms).getHours()*3600 + new Date(nx.ms).getMinutes()*60)}　${nx.name ? nx.name+"　" : ""}${nx.msg.slice(0,18)}`
+    : "—";
+
+  /* --- 4つのタイマー --- */
+  let cur = null, nextSlot = null;
+  for(let i=0;i<slots.length;i++){
+    if(nowMs < slots[i].E){ nextSlot = slots[i]; break; }
+    cur = slots[i];
+    nextSlot = slots[i+1] || null;
+  }
+  // 現在の枠が終了済みなら、注目は次の枠
+  const inSlot = cur && nowMs < cur.R;
+
+  let intSec = D_INT, repSec = D_REP, entSec = 0, preSec = 0;
+  let sInt = "off", sRep = "off", sEnt = "off", sPre = "off";
+
+  if(inSlot){
+    if(nowMs < cur.S){                       // 入室〜開始
+      preSec = (cur.S - nowMs)/1000;
+      sPre = "active";
+      intSec = D_INT; repSec = D_REP;
+      if(nextSlot) entSec = (nextSlot.E - nowMs)/1000;
+    }else if(nowMs < cur.I){                 // 医療面接・身体診察
+      intSec = (cur.I - nowMs)/1000;
+      sInt = intSec <= 60 ? "warn" : "active";
+      repSec = D_REP;
+      if(nextSlot){ entSec = (nextSlot.E - nowMs)/1000; preSec = (nextSlot.S - nowMs)/1000; }
+    }else{                                   // 情報の整理・報告
+      intSec = 0;
+      repSec = (cur.R - nowMs)/1000;
+      sRep = repSec <= 60 ? "warn" : "active";
+      if(nextSlot){ entSec = (nextSlot.E - nowMs)/1000; preSec = (nextSlot.S - nowMs)/1000; }
+    }
+  }else if(nextSlot){                        // 枠と枠のあいだ／開始前
+    entSec = (nextSlot.E - nowMs)/1000;
+    preSec = (nextSlot.S - nowMs)/1000;
+    sEnt = entSec <= 60 ? "warn" : "active";
+    intSec = D_INT; repSec = D_REP;
+  }else{                                     // 全日程終了
+    intSec = 0; repSec = 0;
+  }
+
+  setClock("int", intSec); setClock("rep", repSec);
+  setClock("ent", entSec); setClock("pre", preSec);
+  setCard("cInt", sInt); setCard("cRep", sRep);
+  setCard("cEnter", sEnt); setCard("cPre", sPre);
+
+  if($("sheet").classList.contains("show")) markSheet();
+}
+
+/* =========================================================
+   操作
+   ========================================================= */
+function showTimer(){
+  $("screenSetup").classList.remove("show");
+  $("screenTimer").classList.add("show");
+}
+function showSetup(){
+  $("screenTimer").classList.remove("show");
+  $("screenSetup").classList.add("show");
+}
+async function requestWakeLock(){
+  try{
+    if("wakeLock" in navigator){
+      wakeLock = await navigator.wakeLock.request("screen");
+      document.addEventListener("visibilitychange", async ()=>{
+        if(document.visibilityState === "visible" && armed){
+          try{ wakeLock = await navigator.wakeLock.request("screen"); }catch(e){}
+        }
+      });
+    }
+  }catch(e){}
+}
+function start(){
+  unlockAudio();
+  if(!buildSchedule()){ alert("実施日と入室時刻を入力してください。"); return; }
+  // 現在時刻より前の放送は「済み」にする（途中から開始しても一気に鳴らない）
+  fired.clear();
+  const now = Date.now();
+  sched.forEach(ev=>{ if(ev.ms <= now) fired.add(ev.ms + "|" + ev.kind + "|" + ev.name); });
+  armed = true;
+  renderSheet();
+  requestWakeLock();
+  showTimer();
+  update();
+}
+function setNowAnchor(){
+  const d = new Date(Date.now() + 60*1000);
+  $("anchorTime").value = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  const dd = new Date();
+  $("runDate").value = `${dd.getFullYear()}-${pad2(dd.getMonth()+1)}-${pad2(dd.getDate())}`;
+}
+
+/* =========================================================
+   初期化
+   ========================================================= */
+function init(){
+  const d = new Date();
+  $("runDate").value = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+
+  const sel = $("anchorSlot");
+  SLOTS.forEach((s,i)=>{
+    const o = document.createElement("option");
+    o.value = i;
+    o.textContent = `${s.n}（標準 ${s.e} 入室）`;
+    sel.appendChild(o);
+  });
+  sel.value = 0;
+  sel.addEventListener("change", ()=>{ $("anchorTime").value = SLOTS[sel.value].e; });
+
+  // 音声テストボタン
+  const tg = $("testGrid");
+  TESTS.forEach(([label, file])=>{
+    const b = document.createElement("button");
+    b.className = "btn sm";
+    b.textContent = label;
+    b.onclick = ()=>{
+      unlockAudio();
+      if(file === "__bell"){ bell(); }
+      else if(label.includes("♪")){ bell(); setTimeout(()=>playFile(file), BELL_DELAY); }
+      else { playFile(file); }
+      b.classList.add("playing");
+      setTimeout(()=>b.classList.remove("playing"), 1200);
+    };
+    tg.appendChild(b);
+  });
+
+  $("btnStart").onclick = start;
+  $("btnNow").onclick   = setNowAnchor;
+  $("btnSetup").onclick = showSetup;
+  $("btnSheet1").onclick = ()=>{ if(!sched.length) buildSchedule(); renderSheet(); $("sheet").classList.add("show"); jumpToNow(); };
+  $("btnSheet2").onclick = ()=>{ $("sheet").classList.add("show"); jumpToNow(); };
+  $("btnSheetClose").onclick = ()=> $("sheet").classList.remove("show");
+  $("btnJump").onclick = jumpToNow;
+
+  initAudio();
+  if(tick) clearInterval(tick);
+  tick = setInterval(update, 200);
+  update();
+}
+window.addEventListener("load", init);
+</script>
+</body>
+</html>
