@@ -276,7 +276,7 @@ tr.now td{color:var(--warn);font-weight:700}
     <div class="testgrid" id="testGrid"></div>
     <div class="note">
       1件ずつ確認できます。<b>♪</b>のついた放送は、ベル（チーン）のあとにアナウンスが流れます。<br>
-      当日の音声確認（9:40〜）も、音声確認1〜8を順番に押して流してください。
+      当日の音声確認（第1G①が10:00入室なら<b>9:40</b>）は、<b>音声確認1〜8が自動で順番に流れます</b>。ここのボタンは流し直したいときに使ってください。
     </div>
   </div>
 
@@ -390,7 +390,7 @@ const SLOTS = [
 
 /* ---------- 枠に属さない放送 ---------- */
 const FIXED = [
-  {t:"09:40", file:null,  bell:false, msg:"（会場の音声確認：設定画面のボタンで再生）", st:"音声確認"},
+  {t:"09:40", file:null,  bell:false, msg:"会場の音声確認：音声確認1〜8を順番に自動再生します。", st:"音声確認", kind:"checkseq"},
   {t:"09:45", file:"pre1", bell:false, msg:"評価者の先生方は、試験室に電子機器の持ち込みがないか今一度、ご確認ください。", st:"開始前"},
   {t:"09:50", file:"pre2", bell:false, msg:"受験者入室10分前です。"},
   {t:"09:55", file:"pre3", bell:false, msg:"受験者入室5分前です。評価者・模擬患者は準備してください。"},
@@ -480,6 +480,7 @@ function playFile(f){
   try{ a.pause(); a.currentTime = 0; a.muted = false; a.volume = 1; a.play().catch(()=>{}); }catch(e){}
 }
 function announce(ev){
+  if(ev.kind === "checkseq"){ seqStart(); return; }   // 9:40 の音声確認は8件を順番に
   if(ev.bell){
     bell();
     if(ev.file) setTimeout(()=>playFile(ev.file), BELL_DELAY);
@@ -488,8 +489,50 @@ function announce(ev){
   }
 }
 
+/* ---------- 9:40 の音声確認：8件を順番に自動再生 ---------- */
+// [ファイル, ベルあり]  ※Excelの並び順
+const CHECK_SEQ = [
+  ["check1",false],["check2",true],["check3",true],["check4",false],
+  ["check5",false],["check6",false],["check7",true],["check8",false]
+];
+const SEQ_GAP = 1500;                 // 1件ごとの間(ms)
+let seqRunning = false, seqTimer = null, seqIdx = 0;
+
+function seqStart(){
+  if(seqRunning) return;
+  seqRunning = true;
+  seqRun(0);
+}
+function seqStop(){
+  seqRunning = false;
+  if(seqTimer) clearTimeout(seqTimer);
+  seqTimer = null;
+  seqIdx = 0;
+  CHECK_SEQ.forEach(([f])=>{
+    const a = audios[f];
+    if(a){ a.__wanted = false; try{ a.pause(); a.currentTime = 0; }catch(e){} }
+  });
+}
+function seqRun(i){
+  if(!seqRunning) return;
+  if(i >= CHECK_SEQ.length){ seqRunning = false; seqIdx = 0; return; }
+  seqIdx = i;
+  const [f, withBell] = CHECK_SEQ[i];
+  const a = audios[f];
+  if(!a){ seqTimer = setTimeout(()=>seqRun(i+1), SEQ_GAP); return; }
+  const onEnd = ()=>{
+    a.removeEventListener("ended", onEnd);
+    if(!seqRunning) return;
+    seqTimer = setTimeout(()=>seqRun(i+1), SEQ_GAP);
+  };
+  a.addEventListener("ended", onEnd);
+  if(withBell){ bell(); setTimeout(()=>{ if(seqRunning) playFile(f); }, BELL_DELAY); }
+  else { playFile(f); }
+}
+
 // 個別テスト用：鳴っているものをすべて止める
 function stopAll(){
+  seqStop();
   Object.values(audios).forEach(a=>{
     a.__wanted = false;
     try{ a.pause(); a.currentTime = 0; }catch(e){}
@@ -516,7 +559,7 @@ function buildSchedule(){
   slots = [];
 
   FIXED.forEach(f=>{
-    sched.push({ms:at(toSec(f.t)), name:"", bell:f.bell, file:f.file, msg:f.msg, st:f.st||null, kind:"fixed"});
+    sched.push({ms:at(toSec(f.t)), name:"", bell:f.bell, file:f.file, msg:f.msg, st:f.st||null, kind:f.kind||"fixed"});
   });
 
   SLOTS.forEach((s, i)=>{
@@ -628,7 +671,9 @@ function update(){
     if(ev.st) st = ev.st;
   }
   const sv = $("statv");
-  sv.textContent = st;
+  sv.textContent = (seqRunning && st === "音声確認")
+    ? `音声確認（${seqIdx+1} / ${CHECK_SEQ.length}）`
+    : st;
   sv.classList.toggle("rest", st==="休憩" || st==="昼休憩");
 
   /* --- 次の放送 --- */
@@ -708,6 +753,7 @@ async function requestWakeLock(){
 }
 function start(){
   unlockAudio();
+  seqStop();
   if(!buildSchedule()){ alert("実施日と入室時刻を入力してください。"); return; }
   // 現在時刻より前の放送は「済み」にする（途中から開始しても一気に鳴らない）
   fired.clear();
