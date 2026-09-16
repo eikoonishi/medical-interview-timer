@@ -199,7 +199,8 @@ select{max-width:100%}
 .btn.ghost{background:#fff;color:var(--text)}
 .btn.sm{font-size:14px;padding:9px 15px;min-height:42px;border-color:var(--line);background:#fff;color:var(--text)}
 .btn.sm:active{background:var(--panel)}
-.btnrow{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.btnrow{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;align-items:center}
+#seqInfo{font-size:15px;font-weight:700;color:var(--warn)}
 .testgrid{display:flex;flex-wrap:wrap;gap:8px}
 .playing{border-color:var(--warn) !important;color:var(--warn) !important}
 
@@ -269,16 +270,27 @@ tr.now td{color:var(--warn);font-weight:700}
   </div>
 
   <div class="box">
-    <h3>2. 音声テスト</h3>
-    <div class="testgrid" id="testGrid"></div>
+    <h3>2. 音声確認（9:40〜）</h3>
+    <div class="btnrow" style="margin-top:0">
+      <button class="btn" id="btnSeq">音声確認を順番に流す（8件）</button>
+      <span id="seqInfo"></span>
+    </div>
     <div class="note">
-      当日の音声確認（9:40〜）は、上のボタンを順番に押して流してください。<br>
+      押すと <b>音声確認1〜8 が自動で順番に流れます</b>（1件ずつ、あいだに1.5秒）。途中で止めたいときはもう一度押してください。<br>
       ♪の放送はベル（チーン）のあとにアナウンスが流れます。
     </div>
   </div>
 
   <div class="box">
-    <h3>3. 進行表</h3>
+    <h3>3. 個別の音声テスト</h3>
+    <div class="testgrid" id="testGrid"></div>
+    <div class="note">
+      1つずつ確認したいとき、流し直したいときに使ってください。
+    </div>
+  </div>
+
+  <div class="box">
+    <h3>4. 進行表</h3>
     <div class="btnrow" style="margin-top:0">
       <button class="btn ghost" id="btnSheet1">進行表を見る</button>
     </div>
@@ -419,12 +431,12 @@ const TESTS = [
   ["6分経過","min6"],["12分経過","min12"],["終了 ♪","end"],["終了＋休憩 ♪","end_break"],
   ["前半終了 ♪","am_end"],["全体終了 ♪","all_end"]
 ];
-const ALL_FILES = ["check1","check2","check3","check4","check5","check6","check7","check8",
+const ALL_FILES = ["bell","check1","check2","check3","check4","check5","check6","check7","check8",
   "pre1","pre2","pre3","min1","min3","enter","start","min6","min12","end","end_break","am_end","all_end"];
 
 const BASE_ANCHOR = toSec("10:00");   // SLOTS の基準
 const D_START = 60, D_INT = 12*60, D_REP = 4*60;   // 入室→開始1分 / 面接12分 / 報告4分
-const BELL_DELAY = 900;               // ベル→アナウンスの間(ms)
+const BELL_DELAY = 1000;              // ベル→アナウンスの間(ms)
 
 /* ---------- 状態 ---------- */
 let sched = [];       // {ms, name, bell, file, msg, st, kind}
@@ -432,7 +444,6 @@ let slots = [];       // {n, E, S, I, R}  (ms)
 let armed = false;
 let fired = new Set();
 let audios = {};
-let actx = null;
 let tick = null;
 let wakeLock = null;
 
@@ -457,34 +468,10 @@ function unlockAudio(){
     if(p && p.then) p.then(()=>{ a.pause(); a.currentTime = 0; a.muted = wasMuted; }).catch(()=>{ a.muted = wasMuted; });
     else { try{ a.pause(); a.currentTime = 0; }catch(e){} a.muted = wasMuted; }
   });
-  try{
-    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
-    if(actx.state === "suspended") actx.resume();
-  }catch(e){}
 }
-// 「チーン」（倍音を重ねた鈴の音）
+// 「チーン」（録音素材 bell.mp3）
 function bell(){
-  try{
-    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
-    if(actx.state === "suspended") actx.resume();
-    const t0 = actx.currentTime + 0.02;
-    const master = actx.createGain();
-    master.gain.value = 0.9;
-    master.connect(actx.destination);
-    // [周波数, 音量, 減衰秒]
-    [[1046.5,0.55,2.2],[2093,0.30,1.5],[2840,0.18,1.0],[4186,0.10,0.6]].forEach(([f,g,d])=>{
-      const o = actx.createOscillator();
-      const gn = actx.createGain();
-      o.type = "sine";
-      o.frequency.setValueAtTime(f, t0);
-      gn.gain.setValueAtTime(0.0001, t0);
-      gn.gain.exponentialRampToValueAtTime(g, t0+0.006);
-      gn.gain.exponentialRampToValueAtTime(0.0001, t0+d);
-      o.connect(gn).connect(master);
-      o.start(t0);
-      o.stop(t0+d+0.05);
-    });
-  }catch(e){}
+  playFile("bell");
 }
 function playFile(f){
   if(!f) return;
@@ -500,6 +487,52 @@ function announce(ev){
   }else{
     playFile(ev.file);
   }
+}
+
+/* ---------- 音声確認（9:40〜）を順番に流す ---------- */
+// [ファイル, ベルあり]  ※Excelの並び順
+const CHECK_SEQ = [
+  ["check1",false],["check2",true],["check3",true],["check4",false],
+  ["check5",false],["check6",false],["check7",true],["check8",false]
+];
+const SEQ_GAP = 1500;        // 1件ごとの間(ms)
+let seqRunning = false, seqTimer = null, seqEnd = null, seqAudio = null;
+
+function seqStatus(i){
+  $("seqInfo").textContent = seqRunning ? `音声確認 ${i+1} / ${CHECK_SEQ.length} を再生中…` : "";
+  $("btnSeq").textContent  = seqRunning ? "停止" : "音声確認を順番に流す（8件）";
+}
+function seqStop(){
+  seqRunning = false;
+  if(seqTimer) clearTimeout(seqTimer);
+  seqTimer = null;
+  if(seqAudio && seqEnd) seqAudio.removeEventListener("ended", seqEnd);
+  CHECK_SEQ.forEach(([f])=>{ const a = audios[f]; if(a){ try{ a.pause(); a.currentTime = 0; }catch(e){} } });
+  const b = audios["bell"]; if(b){ try{ b.pause(); b.currentTime = 0; }catch(e){} }
+  seqStatus(0);
+}
+function seqRun(i){
+  if(!seqRunning) return;
+  if(i >= CHECK_SEQ.length){ seqStop(); return; }
+  const [f, withBell] = CHECK_SEQ[i];
+  seqStatus(i);
+  const a = audios[f];
+  if(!a){ seqTimer = setTimeout(()=>seqRun(i+1), SEQ_GAP); return; }
+  seqAudio = a;
+  seqEnd = ()=>{
+    a.removeEventListener("ended", seqEnd);
+    if(!seqRunning) return;
+    seqTimer = setTimeout(()=>seqRun(i+1), SEQ_GAP);
+  };
+  a.addEventListener("ended", seqEnd);
+  if(withBell){ bell(); setTimeout(()=>{ if(seqRunning) playFile(f); }, BELL_DELAY); }
+  else { playFile(f); }
+}
+function seqToggle(){
+  unlockAudio();
+  if(seqRunning){ seqStop(); return; }
+  seqRunning = true;
+  seqRun(0);
 }
 
 /* =========================================================
@@ -709,6 +742,7 @@ async function requestWakeLock(){
 }
 function start(){
   unlockAudio();
+  if(seqRunning) seqStop();
   if(!buildSchedule()){ alert("実施日と入室時刻を入力してください。"); return; }
   // 現在時刻より前の放送は「済み」にする（途中から開始しても一気に鳴らない）
   fired.clear();
@@ -752,6 +786,7 @@ function init(){
     b.textContent = label;
     b.onclick = ()=>{
       unlockAudio();
+      if(seqRunning) seqStop();
       if(file === "__bell"){ bell(); }
       else if(label.includes("♪")){ bell(); setTimeout(()=>playFile(file), BELL_DELAY); }
       else { playFile(file); }
@@ -763,6 +798,7 @@ function init(){
 
   $("btnStart").onclick = start;
   $("btnNow").onclick   = setNowAnchor;
+  $("btnSeq").onclick   = seqToggle;
   $("btnSetup").onclick = showSetup;
   $("btnSheet1").onclick = ()=>{ if(!sched.length) buildSchedule(); renderSheet(); $("sheet").classList.add("show"); jumpToNow(); };
   $("btnSheet2").onclick = ()=>{ $("sheet").classList.add("show"); jumpToNow(); };
