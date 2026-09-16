@@ -77,13 +77,11 @@ body{
 .grid{
   flex:1 1 auto;
   display:grid;
-  grid-template-columns:1fr;
-  grid-template-rows:1fr 1fr;
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:1.6fr 1fr;
   gap:12px;
   min-height:0;
 }
-.grid.one{grid-template-rows:1fr}
-.card.hide{display:none}
 .card{
   border:3px solid var(--line);
   border-radius:20px;
@@ -98,15 +96,13 @@ body{
   transition:border-color .2s, background .2s;
 }
 .card h2{
-  font-size:min(3.6vh,30px);
+  font-size:min(2.9vh,24px);
   font-weight:700;
   color:var(--dim);
   line-height:1.2;
   text-align:center;
   transition:color .2s;
-  margin-bottom:6px;
 }
-.grid.one .card h2{font-size:min(4.6vh,38px)}
 .card .clk{
   color:var(--off);
   line-height:1;
@@ -117,10 +113,10 @@ body{
   font-style:normal;
   font-weight:500;
 }
-.card .clk{font-size:min(25vh,21vw);font-weight:700}
-.card .clk i{font-size:min(10vh,8.4vw)}
-.grid.one .card .clk{font-size:min(34vh,26vw)}
-.grid.one .card .clk i{font-size:min(13.5vh,10.4vw)}
+.big .clk{font-size:min(19vh,13.6vw);font-weight:700}
+.big .clk i{font-size:min(8vh,5.8vw)}
+.small .clk{font-size:min(9.6vh,7.2vw);font-weight:700}
+.small .clk i{font-size:min(4.6vh,3.4vw)}
 
 .card.active{border-color:var(--on);background:#fff}
 .card.active h2{color:var(--text)}
@@ -318,24 +314,21 @@ tr.now td{color:var(--warn);font-weight:700}
   </div>
 
   <div class="grid" id="grid">
-    <div class="card" id="cInt">
+    <div class="card big" id="cInt">
       <h2>医療面接と身体診察　残り</h2>
       <div class="clk num"><span id="intM">12</span><i>分</i><span id="intS">00</span><i>秒</i></div>
     </div>
-    <div class="card" id="cRep">
+    <div class="card big" id="cRep">
       <h2>情報の整理・報告　残り</h2>
       <div class="clk num"><span id="repM">4</span><i>分</i><span id="repS">00</span><i>秒</i></div>
     </div>
-    <div class="card" id="cEnter">
+    <div class="card small" id="cEnter">
       <h2>次の受験者入室まで</h2>
       <div class="clk num"><span id="entM">0</span><i>分</i><span id="entS">00</span><i>秒</i></div>
     </div>
-    <div class="card" id="cPre">
+    <div class="card small" id="cPre">
       <h2>試験開始まで</h2>
       <div class="clk num"><span id="preM">0</span><i>分</i><span id="preS">00</span><i>秒</i></div>
-    </div>
-    <div class="card active hide" id="cDone">
-      <h2>本日の試験はすべて終了しました</h2>
     </div>
   </div>
 
@@ -648,44 +641,38 @@ function update(){
   // 現在の枠が終了済みなら、注目は次の枠
   const inSlot = cur && nowMs < cur.R;
 
-  // 画面に出すのは「いま必要なものだけ」。試験中は入室・開始のカウントダウンを出さない。
+  // 4つとも出したまま、いま関係のないものは動かさない（0分00秒で止める）
   let intSec = D_INT, repSec = D_REP, entSec = 0, preSec = 0;
   let sInt = "off", sRep = "off", sEnt = "off", sPre = "off";
-  let show = [];
 
   if(inSlot){
     if(nowMs < cur.S){                       // 入室〜試験開始（1分）
       preSec = (cur.S - nowMs)/1000;
       sPre = preSec <= 60 ? "warn" : "active";
-      show = ["cPre"];
+      if(nextSlot) entSec = (nextSlot.E - nowMs)/1000;
     }else if(nowMs < cur.I){                 // 医療面接・身体診察（12分）
       intSec = (cur.I - nowMs)/1000;
       sInt = intSec <= 60 ? "warn" : "active";
       repSec = D_REP;
-      show = ["cInt","cRep"];
+      entSec = 0; preSec = 0;                // ← 試験中は下2つを止める
     }else{                                   // 情報の整理・報告（4分）
+      intSec = 0;
       repSec = (cur.R - nowMs)/1000;
       sRep = repSec <= 60 ? "warn" : "active";
-      show = ["cRep"];
+      entSec = 0; preSec = 0;                // ← 試験中は下2つを止める
     }
   }else if(nextSlot){                        // 枠と枠のあいだ／開始前／休憩
     entSec = (nextSlot.E - nowMs)/1000;
     preSec = (nextSlot.S - nowMs)/1000;
     sEnt = entSec <= 60 ? "warn" : "active";
-    show = ["cEnter","cPre"];
   }else{                                     // 全日程終了
-    show = ["cDone"];
+    intSec = 0; repSec = 0;
   }
 
   setClock("int", intSec); setClock("rep", repSec);
   setClock("ent", entSec); setClock("pre", preSec);
   setCard("cInt", sInt); setCard("cRep", sRep);
   setCard("cEnter", sEnt); setCard("cPre", sPre);
-
-  ["cInt","cRep","cEnter","cPre","cDone"].forEach(id=>{
-    $(id).classList.toggle("hide", !show.includes(id));
-  });
-  $("grid").classList.toggle("one", show.length === 1);
 
   if($("sheet").classList.contains("show")) markSheet();
 }
