@@ -390,7 +390,7 @@ const SLOTS = [
 
 /* ---------- 枠に属さない放送 ---------- */
 const FIXED = [
-  {t:"09:40", file:null,  bell:false, msg:"会場の音声確認：音声確認1〜8を順番に自動再生します。", st:"音声確認", kind:"checkseq"},
+  {t:"09:40", file:null,  bell:false, msg:"会場の音声確認（1〜8を順番に自動再生）", st:"音声確認", kind:"checkseq"},
   {t:"09:45", file:"pre1", bell:false, msg:"評価者の先生方は、試験室に電子機器の持ち込みがないか今一度、ご確認ください。", st:"開始前"},
   {t:"09:50", file:"pre2", bell:false, msg:"受験者入室10分前です。"},
   {t:"09:55", file:"pre3", bell:false, msg:"受験者入室5分前です。評価者・模擬患者は準備してください。"},
@@ -677,9 +677,10 @@ function update(){
   sv.classList.toggle("rest", st==="休憩" || st==="昼休憩");
 
   /* --- 次の放送 --- */
-  const nx = sched.find(ev => ev.ms > nowMs && ev.file);
+  // 音声確認（8件まとめて）も「次の放送」に含める
+  const nx = sched.find(ev => ev.ms > nowMs && (ev.file || ev.kind === "checkseq"));
   $("nextUp").textContent = nx
-    ? `${fmtHM(new Date(nx.ms).getHours()*3600 + new Date(nx.ms).getMinutes()*60)}　${nx.name ? nx.name+"　" : ""}${nx.msg.slice(0,18)}`
+    ? `${fmtHM(new Date(nx.ms).getHours()*3600 + new Date(nx.ms).getMinutes()*60)}　${nx.name ? nx.name+"　" : ""}${nx.msg.slice(0,24)}`
     : "—";
 
   /* --- 4つのタイマー --- */
