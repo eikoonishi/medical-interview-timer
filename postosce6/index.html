@@ -377,7 +377,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "2026-09-16 h";
+const VERSION = "2026-09-16 j";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -457,7 +457,7 @@ let wakeLock = null;
 function initAudio(){
   ALL_FILES.forEach(f=>{
     if(audios[f]) return;
-    const a = new Audio(`sounds/${f}.mp3?v=${encodeURIComponent(VERSION)}`);
+    const a = new Audio(`sounds/${f}.m4a?v=${encodeURIComponent(VERSION)}`);
     a.preload = "auto";
     audios[f] = a;
   });
@@ -545,6 +545,26 @@ function seqRun(i){
   a.addEventListener("ended", onEnd);
   if(withBell){ bell(); setTimeout(()=>{ if(seqRunning) playFile(f); }, BELL_DELAY); }
   else { playFile(f); }
+}
+
+/* ---------- 頭切れ対策 ----------
+   放送の間隔が空くとスピーカー（アンプ）が眠り、鳴り始めが欠ける。
+   音声ファイルの先頭に0.4秒の無音を入れたうえ、放送の少し前に
+   ベルの無音部分をごく小さい音量で鳴らして出力を起こしておく。  */
+const warmed = new Set();
+function warmUp(){
+  const a = audios["bell"];
+  if(!a || !a.paused) return;
+  try{
+    a.__wanted = true;
+    a.muted = false;
+    a.volume = 0.001;
+    a.currentTime = 0;
+    const p = a.play();
+    const back = ()=>{ try{ a.pause(); a.currentTime = 0; }catch(e){} a.volume = 1; a.__wanted = false; };
+    if(p && p.then) p.then(()=> setTimeout(back, 250)).catch(back);
+    else setTimeout(back, 250);
+  }catch(e){ a.volume = 1; a.__wanted = false; }
 }
 
 // 個別テスト用：鳴っているものをすべて止める
@@ -673,6 +693,13 @@ function update(){
   $("nowv").textContent = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
   if(!armed || !sched.length) return;
 
+  /* --- 放送の少し前に音声出力を起こす --- */
+  const soon = sched.find(ev => ev.ms > nowMs && (ev.ms - nowMs) <= 1800 && (ev.file || ev.kind === "checkseq"));
+  if(soon){
+    const wk = soon.ms + "|" + soon.kind + "|" + soon.name;
+    if(!warmed.has(wk)){ warmed.add(wk); warmUp(); }
+  }
+
   /* --- 放送 --- */
   for(const ev of sched){
     if(ev.ms > nowMs) break;
@@ -794,6 +821,7 @@ function start(){
 
   // 現在時刻より前の放送は「済み」にする（途中から開始しても一気に鳴らない）
   fired.clear();
+  warmed.clear();
   const now = Date.now();
   sched.forEach(ev=>{ if(ev.ms <= now) fired.add(ev.ms + "|" + ev.kind + "|" + ev.name); });
   armed = true;
