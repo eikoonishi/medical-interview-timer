@@ -324,11 +324,11 @@ tr.now td{color:var(--warn);font-weight:700}
     </div>
     <div class="card small" id="cEnter">
       <h2>次の受験者入室まで</h2>
-      <div class="clk num"><span id="entM">0</span><i>分</i><span id="entS">00</span><i>秒</i></div>
+      <div class="clk num"><span id="entM">--</span><i>分</i><span id="entS">--</span><i>秒</i></div>
     </div>
     <div class="card small" id="cPre">
       <h2>試験開始まで</h2>
-      <div class="clk num"><span id="preM">0</span><i>分</i><span id="preS">00</span><i>秒</i></div>
+      <div class="clk num"><span id="preM">--</span><i>分</i><span id="preS">--</span><i>秒</i></div>
     </div>
   </div>
 
@@ -590,7 +590,13 @@ function jumpToNow(){
 /* =========================================================
    画面更新
    ========================================================= */
+// sec に null を渡すと「--分--秒」＝そのタイマーは作動していない
 function setClock(pfx, sec){
+  if(sec === null){
+    $(pfx+"M").textContent = "--";
+    $(pfx+"S").textContent = "--";
+    return;
+  }
   const s = Math.max(0, Math.ceil(sec));
   $(pfx+"M").textContent = Math.floor(s/60);
   $(pfx+"S").textContent = pad2(s%60);
@@ -641,32 +647,32 @@ function update(){
   // 現在の枠が終了済みなら、注目は次の枠
   const inSlot = cur && nowMs < cur.R;
 
-  // 4つとも出したまま、いま関係のないものは動かさない（0分00秒で止める）
-  let intSec = D_INT, repSec = D_REP, entSec = 0, preSec = 0;
+  // 4つとも出したまま、作動していないものは「--分--秒」にする
+  let intSec = D_INT, repSec = D_REP, entSec = null, preSec = null;
   let sInt = "off", sRep = "off", sEnt = "off", sPre = "off";
 
   if(inSlot){
     if(nowMs < cur.S){                       // 入室〜試験開始（1分）
-      preSec = (cur.S - nowMs)/1000;
+      preSec = (cur.S - nowMs)/1000;         // 試験開始までのみ作動
       sPre = preSec <= 60 ? "warn" : "active";
-      if(nextSlot) entSec = (nextSlot.E - nowMs)/1000;
+      entSec = null;                         // 入室したので次の入室までは止める
     }else if(nowMs < cur.I){                 // 医療面接・身体診察（12分）
       intSec = (cur.I - nowMs)/1000;
       sInt = intSec <= 60 ? "warn" : "active";
       repSec = D_REP;
-      entSec = 0; preSec = 0;                // ← 試験中は下2つを止める
+      entSec = null; preSec = null;          // 試験中は下2つとも止める
     }else{                                   // 情報の整理・報告（4分）
       intSec = 0;
       repSec = (cur.R - nowMs)/1000;
       sRep = repSec <= 60 ? "warn" : "active";
-      entSec = 0; preSec = 0;                // ← 試験中は下2つを止める
+      entSec = null; preSec = null;          // 試験中は下2つとも止める
     }
   }else if(nextSlot){                        // 枠と枠のあいだ／開始前／休憩
-    entSec = (nextSlot.E - nowMs)/1000;
+    entSec = (nextSlot.E - nowMs)/1000;      // 下2つとも作動
     preSec = (nextSlot.S - nowMs)/1000;
     sEnt = entSec <= 60 ? "warn" : "active";
   }else{                                     // 全日程終了
-    intSec = 0; repSec = 0;
+    intSec = null; repSec = null;
   }
 
   setClock("int", intSec); setClock("rep", repSec);
