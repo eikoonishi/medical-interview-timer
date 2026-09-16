@@ -377,7 +377,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "2026-09-16 g";
+const VERSION = "2026-09-16 h";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -597,7 +597,7 @@ function buildSchedule(){
     sched.push({ms:at(st+6*60), name:s.n, bell:false, file:"min6",
       msg:"6分経過しました。", kind:"m6"});
     sched.push({ms:at(iv), name:s.n, bell:false, file:"min12",
-      msg:"12分が経過しました。医療面接と身体診察は終了です。模擬患者は廊下に移動してください。", kind:"m12"});
+      msg:"12分が経過しました。医療面接と身体診察は終了です。", kind:"m12"});
 
     // 終了 → 進行状況は「次の受験者 入室前」／休憩／昼休憩／全日程終了
     let endSt;
@@ -778,6 +778,20 @@ function start(){
   unlockAudio();
   seqStop();
   if(!buildSchedule()){ alert("実施日と入室時刻を入力してください。"); return; }
+  // いまの時刻が時刻表の途中なら、そこから始まることを知らせる
+  const t = Date.now();
+  if(sched.length && t > sched[0].ms){
+    let cur = "開始前";
+    for(const ev of sched){ if(ev.ms > t) break; if(ev.st) cur = ev.st; }
+    const ok = confirm(
+      `いまの時刻は、この時刻表では「${cur}」にあたります。\n` +
+      `このまま途中から開始しますか？\n\n` +
+      `最初（第1G①）から始めたいときは「キャンセル」を押して、\n` +
+      `「入室時刻に現在時刻を入れる」で入室時刻を入れ直してください。`
+    );
+    if(!ok) return;
+  }
+
   // 現在時刻より前の放送は「済み」にする（途中から開始しても一気に鳴らない）
   fired.clear();
   const now = Date.now();
