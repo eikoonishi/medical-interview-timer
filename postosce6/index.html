@@ -377,7 +377,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "2026-09-16 j";
+const VERSION = "2026-09-18 m";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -436,11 +436,12 @@ const TESTS = [
   ["前半終了 ♪","am_end"],["全体終了 ♪","all_end"]
 ];
 const ALL_FILES = ["bell","check1","check2","check3","check4","check5","check6","check7","check8",
-  "pre1","pre2","pre3","min1","min3","enter","start","min6","min12","end","end_break","am_end","all_end"];
+  "pre1","pre2","pre3","min1","min3","enter","start","min6","min12","end","end_break","am_end","all_end",
+  // ♪の放送用（ベル＋アナウンスを1本にしたもの）
+  "check2_b","check3_b","check7_b","enter_b","start_b","end_b","end_break_b","am_end_b","all_end_b"];
 
 const BASE_ANCHOR = toSec("10:00");   // SLOTS の基準
 const D_START = 60, D_INT = 12*60, D_REP = 4*60;   // 入室→開始1分 / 面接12分 / 報告4分
-const BELL_DELAY = 1000;              // ベル→アナウンスの間(ms)
 
 /* ---------- 状態 ---------- */
 let sched = [];       // {ms, name, bell, file, msg, st, kind}
@@ -448,6 +449,7 @@ let slots = [];       // {n, E, S, I, R}  (ms)
 let armed = false;
 let fired = new Set();
 let audios = {};
+let warmAudio = null;
 let tick = null;
 let wakeLock = null;
 
@@ -461,6 +463,10 @@ function initAudio(){
     a.preload = "auto";
     audios[f] = a;
   });
+  if(!warmAudio){
+    warmAudio = new Audio(`sounds/bell.m4a?v=${encodeURIComponent(VERSION)}`);
+    warmAudio.preload = "auto";
+  }
 }
 // iOS の自動再生制限を解除（全要素を muted で play→pause）
 // ※ この pause は非同期に走るので、鳴らしている最中の音（__wanted）は絶対に触らない
@@ -469,7 +475,7 @@ function unlockAudio(){
   if(audioUnlocked) return;
   audioUnlocked = true;
   initAudio();
-  Object.values(audios).forEach(a=>{
+  Object.values(audios).concat(warmAudio ? [warmAudio] : []).forEach(a=>{
     if(a.__wanted) return;
     const wasMuted = a.muted;
     a.muted = true;
@@ -483,9 +489,15 @@ function unlockAudio(){
     else done();
   });
 }
-// 「チーン」（録音素材 bell.mp3）
+// 「チーン」単独（音声テスト用）
 function bell(){
   playFile("bell");
+}
+// ♪のついた放送は「ベル＋アナウンス」が1本にまとまった _b を鳴らす。
+// 2つを同時に鳴らすと iOS でアナウンス側が出ないことがあるため。
+function fileFor(ev){
+  if(!ev.file) return null;
+  return ev.bell && audios[ev.file + "_b"] ? ev.file + "_b" : ev.file;
 }
 function playFile(f){
   if(!f) return;
@@ -494,16 +506,15 @@ function playFile(f){
   if(!a) return;
   a.__wanted = true;                                   // 解除処理に止められないための目印
   a.addEventListener("ended", ()=>{ a.__wanted = false; }, {once:true});
-  try{ a.pause(); a.currentTime = 0; a.muted = false; a.volume = 1; a.play().catch(()=>{}); }catch(e){}
+  try{
+    a.pause(); a.currentTime = 0; a.muted = false; a.volume = 1;
+    // 一度失敗しても鳴らないままにしない（iOSで弾かれることがある）
+    a.play().catch(()=>{ setTimeout(()=>{ try{ a.play().catch(()=>{}); }catch(e){} }, 250); });
+  }catch(e){}
 }
 function announce(ev){
   if(ev.kind === "checkseq"){ seqStart(); return; }   // 9:40 の音声確認は8件を順番に
-  if(ev.bell){
-    bell();
-    if(ev.file) setTimeout(()=>playFile(ev.file), BELL_DELAY);
-  }else{
-    playFile(ev.file);
-  }
+  playFile(fileFor(ev));
 }
 
 /* ---------- 9:40 の音声確認：8件を順番に自動再生 ---------- */
@@ -520,13 +531,17 @@ function seqStart(){
   seqRunning = true;
   seqRun(0);
 }
+function seqKey(i){
+  const [f, withBell] = CHECK_SEQ[i];
+  return withBell && audios[f + "_b"] ? f + "_b" : f;
+}
 function seqStop(){
   seqRunning = false;
   if(seqTimer) clearTimeout(seqTimer);
   seqTimer = null;
   seqIdx = 0;
-  CHECK_SEQ.forEach(([f])=>{
-    const a = audios[f];
+  CHECK_SEQ.forEach((_, i)=>{
+    const a = audios[seqKey(i)];
     if(a){ a.__wanted = false; try{ a.pause(); a.currentTime = 0; }catch(e){} }
   });
 }
@@ -534,8 +549,8 @@ function seqRun(i){
   if(!seqRunning) return;
   if(i >= CHECK_SEQ.length){ seqRunning = false; seqIdx = 0; return; }
   seqIdx = i;
-  const [f, withBell] = CHECK_SEQ[i];
-  const a = audios[f];
+  const key = seqKey(i);
+  const a = audios[key];
   if(!a){ seqTimer = setTimeout(()=>seqRun(i+1), SEQ_GAP); return; }
   const onEnd = ()=>{
     a.removeEventListener("ended", onEnd);
@@ -543,8 +558,7 @@ function seqRun(i){
     seqTimer = setTimeout(()=>seqRun(i+1), SEQ_GAP);
   };
   a.addEventListener("ended", onEnd);
-  if(withBell){ bell(); setTimeout(()=>{ if(seqRunning) playFile(f); }, BELL_DELAY); }
-  else { playFile(f); }
+  playFile(key);
 }
 
 /* ---------- 頭切れ対策 ----------
@@ -553,24 +567,24 @@ function seqRun(i){
    ベルの無音部分をごく小さい音量で鳴らして出力を起こしておく。  */
 const warmed = new Set();
 function warmUp(){
-  const a = audios["bell"];
+  // 放送に使う要素とは別のものを使う（本番のベルを止めてしまわないため）
+  const a = warmAudio;
   if(!a || !a.paused) return;
   try{
-    a.__wanted = true;
     a.muted = false;
     a.volume = 0.001;
     a.currentTime = 0;
+    const back = ()=>{ try{ a.pause(); a.currentTime = 0; }catch(e){} };
     const p = a.play();
-    const back = ()=>{ try{ a.pause(); a.currentTime = 0; }catch(e){} a.volume = 1; a.__wanted = false; };
-    if(p && p.then) p.then(()=> setTimeout(back, 250)).catch(back);
+    if(p && p.then) p.then(()=> setTimeout(back, 250)).catch(()=>{});
     else setTimeout(back, 250);
-  }catch(e){ a.volume = 1; a.__wanted = false; }
+  }catch(e){}
 }
 
 // 個別テスト用：鳴っているものをすべて止める
 function stopAll(){
   seqStop();
-  Object.values(audios).forEach(a=>{
+  Object.values(audios).concat(warmAudio ? [warmAudio] : []).forEach(a=>{
     a.__wanted = false;
     try{ a.pause(); a.currentTime = 0; }catch(e){}
   });
@@ -694,7 +708,7 @@ function update(){
   if(!armed || !sched.length) return;
 
   /* --- 放送の少し前に音声出力を起こす --- */
-  const soon = sched.find(ev => ev.ms > nowMs && (ev.ms - nowMs) <= 1800 && (ev.file || ev.kind === "checkseq"));
+  const soon = sched.find(ev => ev.ms > nowMs && (ev.ms - nowMs) <= 2500 && (ev.file || ev.kind === "checkseq"));
   if(soon){
     const wk = soon.ms + "|" + soon.kind + "|" + soon.name;
     if(!warmed.has(wk)){ warmed.add(wk); warmUp(); }
@@ -865,7 +879,7 @@ function init(){
     b.onclick = ()=>{
       unlockAudio();
           if(file === "__bell"){ bell(); }
-      else if(label.includes("♪")){ bell(); setTimeout(()=>playFile(file), BELL_DELAY); }
+      else if(label.includes("♪") && audios[file + "_b"]){ playFile(file + "_b"); }
       else { playFile(file); }
       b.classList.add("playing");
       setTimeout(()=>b.classList.remove("playing"), 1200);
