@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
 """
-2026postOSCE/音声/*.mp3 を postosce6/sounds/*.m4a に変換する。
+2026postOSCE/音声/*.mp3 を postosce6/sounds/*.mp3 に変換する。
 
-・放送の間隔が空くとスピーカー（アンプ）が眠り、鳴り始めの数百msが
-  欠けるので、各音声の先頭に無音を足す。
+・形式は 44.1kHz モノラル MP3（MPEG-1 Layer III）。
+  Windows の Chrome で m4a(AAC) が再生されなかったため、最も互換性の高い
+  この形式に統一している。勝手に m4a や 24kHz に変えないこと。
+・放送の間隔が空くとスピーカー（アンプ）が眠り、鳴り始めの数百msが欠ける
+  ので、各音声の先頭に無音を足す。
 ・♪のついた放送は「ベル＋アナウンス」を1つのファイルに合成する
-  （<name>_b.m4a）。iOS は音声を同時に鳴らせないことがあり、別々に
-  鳴らすとアナウンスが出ないことがあるため。
+  （<name>_b.mp3）。iOS は音声を同時に鳴らせないことがあるため。
 
 音声を差し替えたら、2026postOSCE/音声/ の該当ファイルを上書きして
 このスクリプトを実行し直すこと。
     python3 postosce6/tools/build_sounds.py
 """
-import os, shutil, struct, subprocess, sys, tempfile, wave
+import os, shutil, subprocess, tempfile, wave
 
-LEAD_SEC  = 0.4       # 先頭に足す無音の長さ（秒）
+LEAD_SEC  = 0.4       # 先頭に足す無音（秒）
 BELL_KEEP = 1.2       # ベルとして使う長さ（秒）。後半の無音を捨てる
 BELL_GAP  = 0.2       # ベルとアナウンスのあいだ（秒）
+SR        = 44100     # サンプルレート（MPEG-1 Layer III になる値）
+KBPS      = "96k"
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC  = os.path.join(ROOT, "2026postOSCE", "音声")
@@ -40,47 +44,56 @@ FILES = {
 BELL_FILES = ["check2", "check3", "check7", "enter", "start",
               "end", "end_break", "am_end", "all_end"]
 
-SR = 24000            # アナウンスのサンプルレート（mono）
+
+def ffmpeg():
+    import imageio_ffmpeg
+    return imageio_ffmpeg.get_ffmpeg_exe()
 
 
-def run(cmd):
-    r = subprocess.run(cmd, capture_output=True)
+FF = ffmpeg()
+
+
+def run(args):
+    r = subprocess.run([FF, "-y", "-hide_banner", "-loglevel", "error"] + args,
+                       capture_output=True)
     if r.returncode != 0:
-        raise RuntimeError(" ".join(map(str, cmd)) + "\n" + r.stderr.decode())
+        raise RuntimeError(" ".join(args) + "\n" + r.stderr.decode())
 
 
-def read_wav(path):
+def to_wav(src, dst):
+    """44.1kHz モノラル 16bit の wav にそろえる"""
+    run(["-i", src, "-ar", str(SR), "-ac", "1", "-c:a", "pcm_s16le", dst])
+
+
+def read_frames(path):
     with wave.open(path, "rb") as w:
-        return w.getnchannels(), w.getsampwidth(), w.getframerate(), w.readframes(w.getnframes())
+        return w.readframes(w.getnframes())
 
 
-def write_wav(path, ch, sw, sr, data):
+def write_wav(path, data):
     with wave.open(path, "wb") as w:
-        w.setnchannels(ch); w.setsampwidth(sw); w.setframerate(sr)
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
         w.writeframes(data)
 
 
-def encode(wav_path, out_path, ch):
-    run(["afconvert", "-f", "m4af", "-d", "aac",
-         "-b", "96000" if ch > 1 else "64000", wav_path, out_path])
+def to_mp3(wav_path, out_path):
+    run(["-i", wav_path, "-c:a", "libmp3lame", "-b:a", KBPS, "-ac", "1", out_path])
 
 
 def main():
     os.makedirs(DST, exist_ok=True)
     tmp = tempfile.mkdtemp()
     try:
-        # ベルをアナウンスと同じ形式（24kHz mono）に落として用意する
         bell_src = os.path.join(SRC, "bell.mp3")
         if not os.path.exists(bell_src):
             print("!! bell.mp3 がありません"); return
-        bell24 = os.path.join(tmp, "bell24.wav")
-        run(["afconvert", "-f", "WAVE", "-d", f"LEI16@{SR}", "-c", "1", bell_src, bell24])
-        _, sw, _, bell_data = read_wav(bell24)
-        bell_data = bell_data[: int(SR * BELL_KEEP) * sw]          # 鳴り終わりで切る
-        gap = b"\x00" * (int(SR * BELL_GAP) * sw)
-        lead24 = b"\x00" * (int(SR * LEAD_SEC) * sw)
+        bw = os.path.join(tmp, "bell.wav")
+        to_wav(bell_src, bw)
+        bell = read_frames(bw)[: int(SR * BELL_KEEP) * 2]      # 鳴り終わりで切る
+        gap  = b"\x00" * (int(SR * BELL_GAP) * 2)
+        lead = b"\x00" * (int(SR * LEAD_SEC) * 2)
 
-        n_plain = n_bell = 0
+        n1 = n2 = 0
         for name, src_name in FILES.items():
             src = os.path.join(SRC, src_name)
             if not os.path.exists(src):
@@ -88,37 +101,30 @@ def main():
                 continue
 
             raw = os.path.join(tmp, name + ".wav")
-            run(["afconvert", "-f", "WAVE", "-d", "LEI16", src, raw])
-            ch, sw_i, sr_i, data = read_wav(raw)
+            to_wav(src, raw)
+            data = read_frames(raw)
+            if name == "bell":
+                data = data[: int(SR * BELL_KEEP) * 2]
 
-            # 単独版（先頭に無音を足すだけ。ベルはここで長さを切る）
-            body = data[: int(sr_i * BELL_KEEP) * ch * sw_i] if name == "bell" else data
+            # 単独版
             pad = os.path.join(tmp, name + "_pad.wav")
-            write_wav(pad, ch, sw_i, sr_i, b"\x00" * (int(sr_i * LEAD_SEC) * ch * sw_i) + body)
-            encode(pad, os.path.join(DST, name + ".m4a"), ch)
-            dur = len(body) / (sr_i * ch * sw_i) + LEAD_SEC
-            print(f"  {name:<12} {src_name:<16} {dur:5.2f}秒")
-            n_plain += 1
+            write_wav(pad, lead + data)
+            to_mp3(pad, os.path.join(DST, name + ".mp3"))
+            print(f"  {name:<12} {len(lead + data) / (SR * 2):6.2f}秒")
+            n1 += 1
 
             # ベル入り版
             if name in BELL_FILES:
-                if sr_i != SR or ch != 1:
-                    v = os.path.join(tmp, name + "_24.wav")
-                    run(["afconvert", "-f", "WAVE", "-d", f"LEI16@{SR}", "-c", "1", src, v])
-                    _, _, _, voice = read_wav(v)
-                else:
-                    voice = data
                 bpad = os.path.join(tmp, name + "_b.wav")
-                write_wav(bpad, 1, sw, SR, lead24 + bell_data + gap + voice)
-                encode(bpad, os.path.join(DST, name + "_b.m4a"), 1)
-                bdur = (len(bell_data) + len(gap) + len(voice)) / (SR * sw) + LEAD_SEC
-                print(f"  {name+'_b':<12} {'♪ベル＋' + src_name:<16} {bdur:5.2f}秒")
-                n_bell += 1
+                write_wav(bpad, lead + bell + gap + data)
+                to_mp3(bpad, os.path.join(DST, name + "_b.mp3"))
+                print(f"  {name + '_b':<12} {len(lead + bell + gap + data) / (SR * 2):6.2f}秒  ♪ベル＋")
+                n2 += 1
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
-    print(f"\n単独 {n_plain} 件 ＋ ベル入り {n_bell} 件 を {DST} に出力しました")
-    print(f"（先頭 {LEAD_SEC} 秒の無音／ベル {BELL_KEEP} 秒＋間 {BELL_GAP} 秒）")
+    print(f"\n単独 {n1} 件 ＋ ベル入り {n2} 件 → {DST}")
+    print(f"（{SR}Hz モノラル MP3 {KBPS} ／ 先頭 {LEAD_SEC} 秒の無音）")
 
 
 if __name__ == "__main__":

@@ -214,6 +214,11 @@ select{max-width:100%}
 .btnrow{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;align-items:center}
 .testgrid{display:flex;flex-wrap:wrap;gap:8px}
 .playing{border-color:var(--warn) !important;color:var(--warn) !important}
+.diag{
+  margin-top:12px;padding:12px 14px;border:2px solid var(--line);border-radius:12px;
+  background:var(--panel);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12.5px;line-height:1.8;color:var(--text);white-space:pre-wrap;word-break:break-word;
+}
 
 /* ===== 進行表 ===== */
 #sheet{
@@ -291,6 +296,10 @@ tr.now td{color:var(--warn);font-weight:700}
       1件ずつ確認できます。<b>♪</b>のついた放送は、ベル（チーン）のあとにアナウンスが流れます。<br>
       当日の音声確認（第1G①が10:00入室なら<b>9:15</b>）は、<b>音声確認1〜8が自動で順番に流れます</b>。ここのボタンは流し直したいときに使ってください。
     </div>
+    <div class="btnrow" style="margin-top:14px">
+      <button class="btn sm" id="btnDiag">音が出ないとき：状態を調べる</button>
+    </div>
+    <pre id="diag" class="diag" hidden></pre>
   </div>
 
   <div class="box">
@@ -377,7 +386,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "2026-09-30 n";
+const VERSION = "2026-10-02 p";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -459,12 +468,12 @@ let wakeLock = null;
 function initAudio(){
   ALL_FILES.forEach(f=>{
     if(audios[f]) return;
-    const a = new Audio(`sounds/${f}.m4a?v=${encodeURIComponent(VERSION)}`);
+    const a = new Audio(`sounds/${f}.mp3?v=${encodeURIComponent(VERSION)}`);
     a.preload = "auto";
     audios[f] = a;
   });
   if(!warmAudio){
-    warmAudio = new Audio(`sounds/bell.m4a?v=${encodeURIComponent(VERSION)}`);
+    warmAudio = new Audio(`sounds/bell.mp3?v=${encodeURIComponent(VERSION)}`);
     warmAudio.preload = "auto";
   }
 }
@@ -579,6 +588,47 @@ function warmUp(){
     if(p && p.then) p.then(()=> setTimeout(back, 250)).catch(()=>{});
     else setTimeout(back, 250);
   }catch(e){}
+}
+
+// 音が出ないときの状態表示
+function runDiag(){
+  unlockAudio();
+  initAudio();
+  const probe = new Audio();
+  const L = [];
+  L.push("版　　　　： " + VERSION);
+  L.push("形式　　　： mp3（この版）");
+  L.push("mp3の再生 ： " + (probe.canPlayType("audio/mpeg") || "×  このブラウザは再生できません"));
+  let ok = 0; const bad = [];
+  ALL_FILES.forEach(f=>{
+    const a = audios[f];
+    if(!a){ bad.push(f + "(未作成)"); return; }
+    if(a.error) bad.push(f + "(エラー" + a.error.code + ")");
+    else if(a.readyState >= 1) ok++;
+  });
+  L.push("読み込み　： " + ok + " / " + ALL_FILES.length + " 件");
+  if(bad.length) L.push("読めない　： " + bad.slice(0, 6).join("  "));
+  L.push("");
+  L.push("「入室してください」を鳴らしています…");
+  const d = $("diag");
+  d.hidden = false;
+  d.textContent = L.join("\n");
+
+  const a = audios["enter"];
+  const show = extra => { d.textContent = L.join("\n") + "\n" + extra; };
+  try{
+    a.__wanted = true; a.muted = false; a.volume = 1; a.currentTime = 0;
+    a.play().then(()=>{
+      setTimeout(()=>{
+        if(a.currentTime > 0.15) show("結果　　　： 再生できました（" + a.currentTime.toFixed(1) + "秒まで進みました）\n音が聞こえないときは、パソコンの音量と、タブのミュート（タブを右クリック →「タブのミュートを解除」）をご確認ください。");
+        else show("結果　　　： 再生が始まりませんでした。この画面をそのまま撮って送ってください。");
+      }, 1600);
+    }).catch(e=>{
+      show("結果　　　： 再生できません（" + (e && e.name ? e.name : e) + "）\nこの画面をそのまま撮って送ってください。");
+    });
+  }catch(e){
+    show("結果　　　： 再生できません（" + e + "）");
+  }
 }
 
 // 個別テスト用：鳴っているものをすべて止める
@@ -890,6 +940,7 @@ function init(){
   $("btnStart").onclick = start;
   $("btnNow").onclick   = setNowAnchor;
   $("btnSetup").onclick = showSetup;
+  $("btnDiag").onclick  = runDiag;
   $("btnSheet1").onclick = ()=>{ if(!sched.length) buildSchedule(); renderSheet(); $("sheet").classList.add("show"); jumpToNow(); };
   $("btnSheet2").onclick = ()=>{ $("sheet").classList.add("show"); jumpToNow(); };
   $("btnSheetClose").onclick = ()=> $("sheet").classList.remove("show");
