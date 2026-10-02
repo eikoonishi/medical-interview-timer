@@ -151,6 +151,7 @@ body{
 }
 .mini:active{background:var(--panel)}
 #nextUp{font-weight:700;color:var(--text);font-size:min(2.2vh,16px)}
+#warnMsg{font-weight:700;color:var(--warn);font-size:min(2.2vh,16px)}
 
 /* ===== 設定画面 ===== */
 #screenSetup{
@@ -357,6 +358,7 @@ tr.now td{color:var(--warn);font-weight:700}
 
   <div class="bottom">
     <span>次の放送：</span><span id="nextUp" class="num">—</span>
+    <span id="warnMsg"></span>
     <span class="spacer"></span>
     <button class="mini" id="btnSheet2">進行表</button>
     <button class="mini" id="btnSetup">設定</button>
@@ -386,7 +388,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261002r";
+const VERSION = "20261002s";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -458,7 +460,6 @@ let slots = [];       // {n, E, S, I, R}  (ms)
 let armed = false;
 let fired = new Set();
 let audios = {};
-let warmAudio = null;
 let tick = null;
 let wakeLock = null;
 
@@ -472,10 +473,6 @@ function initAudio(){
     a.preload = "auto";
     audios[f] = a;
   });
-  if(!warmAudio){
-    warmAudio = new Audio(`sounds/bell.mp3?v=${encodeURIComponent(VERSION)}`);
-    warmAudio.preload = "auto";
-  }
 }
 // iOS の自動再生制限を解除（全要素を muted で play→pause）
 // ※ この pause は非同期に走るので、鳴らしている最中の音（__wanted）は絶対に触らない
@@ -484,7 +481,7 @@ function unlockAudio(){
   if(audioUnlocked) return;
   audioUnlocked = true;
   initAudio();
-  Object.values(audios).concat(warmAudio ? [warmAudio] : []).forEach(a=>{
+  Object.values(audios).forEach(a=>{
     if(a.__wanted) return;
     const wasMuted = a.muted;
     a.muted = true;
@@ -530,8 +527,22 @@ function playFile(f){
 }
 function announce(ev){
   if(ev.kind === "checkseq"){ seqStart(); return; }   // 音声確認は8件を順番に
-  playFile(fileFor(ev));
+  const f = fileFor(ev);
+  if(!f) return;
+  playFile(f);
+  // 本当に鳴り出したか確かめ、鳴っていなければ鳴らし直す（最大5回・約2秒）
+  const a = audios[f];
+  if(!a) return;
+  let n = 0;
+  const check = ()=>{
+    if(a.currentTime > 0.05 || a.ended) return;        // 鳴っている
+    if(++n > 5){ lastFail = f; return; }
+    try{ a.play().catch(()=>{}); }catch(e){}
+    setTimeout(check, 350);
+  };
+  setTimeout(check, 350);
 }
+let lastFail = null;
 
 /* ---------- 音声確認（9:15）：8件を順番に自動再生 ---------- */
 // [ファイル, ベルあり]  ※Excelの並び順
@@ -579,23 +590,9 @@ function seqRun(i){
 
 /* ---------- 頭切れ対策 ----------
    放送の間隔が空くとスピーカー（アンプ）が眠り、鳴り始めが欠ける。
-   音声ファイルの先頭に0.4秒の無音を入れたうえ、放送の少し前に
-   ベルの無音部分をごく小さい音量で鳴らして出力を起こしておく。  */
-const warmed = new Set();
-function warmUp(){
-  // 放送に使う要素とは別のものを使う（本番のベルを止めてしまわないため）
-  const a = warmAudio;
-  if(!a || !a.paused) return;
-  try{
-    a.muted = false;
-    a.volume = 0.001;
-    a.currentTime = 0;
-    const back = ()=>{ try{ a.pause(); a.currentTime = 0; }catch(e){} };
-    const p = a.play();
-    if(p && p.then) p.then(()=> setTimeout(back, 250)).catch(()=>{});
-    else setTimeout(back, 250);
-  }catch(e){}
-}
+   対策は音声ファイルの先頭に入れた0.4秒の無音だけにしてある。
+   以前は放送の直前に別の音を小さく鳴らしていたが、本番の放送が
+   鳴らないことがあったため撤去した。放送の邪魔になることは一切しない。  */
 
 // 音が出ないときの状態表示
 function runDiag(){
@@ -662,7 +659,7 @@ function stopPlaying(){
 }
 function stopAll(){
   seqStop();
-  Object.values(audios).concat(warmAudio ? [warmAudio] : []).forEach(a=>{
+  Object.values(audios).forEach(a=>{
     a.__wanted = false;
     try{ a.pause(); a.currentTime = 0; }catch(e){}
   });
@@ -785,13 +782,6 @@ function update(){
   $("nowv").textContent = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
   if(!armed || !sched.length) return;
 
-  /* --- 放送の少し前に音声出力を起こす --- */
-  const soon = sched.find(ev => ev.ms > nowMs && (ev.ms - nowMs) <= 2500 && (ev.file || ev.kind === "checkseq"));
-  if(soon){
-    const wk = soon.ms + "|" + soon.kind + "|" + soon.name;
-    if(!warmed.has(wk)){ warmed.add(wk); warmUp(); }
-  }
-
   /* --- 放送 --- */
   for(const ev of sched){
     if(ev.ms > nowMs) break;
@@ -814,6 +804,8 @@ function update(){
 
   /* --- 次の放送 --- */
   // 音声確認（8件まとめて）も「次の放送」に含める
+  $("warnMsg").textContent = lastFail ? "⚠ 直前の放送が鳴りませんでした" : "";
+
   const nx = sched.find(ev => ev.ms > nowMs && (ev.file || ev.kind === "checkseq"));
   $("nextUp").textContent = nx
     ? `${fmtHM(new Date(nx.ms).getHours()*3600 + new Date(nx.ms).getMinutes()*60)}　${nx.name ? nx.name+"　" : ""}${nx.msg.slice(0,24)}`
@@ -913,10 +905,10 @@ function start(){
 
   // 現在時刻より前の放送は「済み」にする（途中から開始しても一気に鳴らない）
   fired.clear();
-  warmed.clear();
   const now = Date.now();
   sched.forEach(ev=>{ if(ev.ms <= now) fired.add(ev.ms + "|" + ev.kind + "|" + ev.name); });
   armed = true;
+  lastFail = null;
   $("stateNote").textContent = "";
   renderSheet();
   requestWakeLock();
