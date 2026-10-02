@@ -386,7 +386,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "2026-10-02 p";
+const VERSION = "20261002q";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -609,9 +609,23 @@ function runDiag(){
   L.push("読み込み　： " + ok + " / " + ALL_FILES.length + " 件");
   if(bad.length) L.push("読めない　： " + bad.slice(0, 6).join("  "));
   L.push("");
-  L.push("「入室してください」を鳴らしています…");
   const d = $("diag");
   d.hidden = false;
+  d.textContent = L.join("\n") + "\n通信を確認しています…";
+
+  // 音声ファイルが本当に取得できるかを確かめる
+  fetch("sounds/bell.mp3?x=" + Date.now(), { cache: "no-store" })
+    .then(r => r.blob().then(b => {
+      L.push("通信テスト： HTTP " + r.status + "  " + (r.headers.get("content-type") || "型なし") + "  " + b.size + " バイト");
+      d.textContent = L.join("\n");
+    }))
+    .catch(e => {
+      L.push("通信テスト： 取得できません（" + (e && e.message ? e.message : e) + "）");
+      L.push("　→ ネットワークかセキュリティソフトが音声ファイルを止めている可能性があります。");
+      d.textContent = L.join("\n");
+    });
+
+  L.push("「入室してください」を鳴らしています…");
   d.textContent = L.join("\n");
 
   const a = audios["enter"];
