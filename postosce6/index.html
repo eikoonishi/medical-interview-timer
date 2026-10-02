@@ -386,7 +386,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261002q";
+const VERSION = "20261002r";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -515,11 +515,18 @@ function playFile(f){
   if(!a) return;
   a.__wanted = true;                                   // 解除処理に止められないための目印
   a.addEventListener("ended", ()=>{ a.__wanted = false; }, {once:true});
-  try{
-    a.pause(); a.currentTime = 0; a.muted = false; a.volume = 1;
-    // 一度失敗しても鳴らないままにしない（iOSで弾かれることがある）
-    a.play().catch(()=>{ setTimeout(()=>{ try{ a.play().catch(()=>{}); }catch(e){} }, 250); });
-  }catch(e){}
+  // iOS では再生が弾かれることがあるので、数回鳴らし直す
+  let tries = 0;
+  const go = ()=>{
+    try{
+      a.muted = false; a.volume = 1;
+      if(a.currentTime > 0.02) a.currentTime = 0;
+      const p = a.play();
+      if(p && p.catch) p.catch(()=>{ if(++tries <= 4) setTimeout(go, 180); });
+    }catch(e){ if(++tries <= 4) setTimeout(go, 180); }
+  };
+  try{ a.pause(); a.currentTime = 0; }catch(e){}
+  go();
 }
 function announce(ev){
   if(ev.kind === "checkseq"){ seqStart(); return; }   // 音声確認は8件を順番に
@@ -646,6 +653,13 @@ function runDiag(){
 }
 
 // 個別テスト用：鳴っているものをすべて止める
+// いま鳴っているものだけ止める。
+// 全要素に触ると iOS では次の再生が弾かれることがあるので、最小限にする。
+function stopPlaying(){
+  Object.values(audios).forEach(a=>{
+    if(!a.paused){ a.__wanted = false; try{ a.pause(); a.currentTime = 0; }catch(e){} }
+  });
+}
 function stopAll(){
   seqStop();
   Object.values(audios).concat(warmAudio ? [warmAudio] : []).forEach(a=>{
@@ -942,11 +956,25 @@ function init(){
     b.textContent = label;
     b.onclick = ()=>{
       unlockAudio();
-          if(file === "__bell"){ bell(); }
-      else if(label.includes("♪") && audios[file + "_b"]){ playFile(file + "_b"); }
-      else { playFile(file); }
-      b.classList.add("playing");
-      setTimeout(()=>b.classList.remove("playing"), 1200);
+      stopPlaying();                       // 前の音を止めてから鳴らす
+      const key = (file === "__bell") ? "bell"
+                : (label.includes("♪") && audios[file + "_b"]) ? file + "_b"
+                : file;
+      playFile(key);
+      // 実際に鳴っているあいだだけ色をつける（鳴らなければ色がつかない）
+      const a = audios[key];
+      if(!a) return;
+      b.classList.remove("playing");
+      const on  = ()=> b.classList.add("playing");
+      const off = ()=>{
+        b.classList.remove("playing");
+        a.removeEventListener("playing", on);
+        a.removeEventListener("ended", off);
+        a.removeEventListener("pause", off);
+      };
+      a.addEventListener("playing", on);
+      a.addEventListener("ended", off);
+      a.addEventListener("pause", off);
     };
     tg.appendChild(b);
   });
