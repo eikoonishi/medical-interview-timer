@@ -388,7 +388,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261002s";
+const VERSION = "20261002t";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -551,7 +551,7 @@ const CHECK_SEQ = [
   ["check5",false],["check6",false],["check7",true],["check8",false]
 ];
 const SEQ_GAP = 1500;                 // 1件ごとの間(ms)
-let seqRunning = false, seqTimer = null, seqIdx = 0;
+let seqRunning = false, seqTimer = null, seqIdx = 0, seqLimit = null;
 
 function seqStart(){
   if(seqRunning) return;
@@ -565,7 +565,9 @@ function seqKey(i){
 function seqStop(){
   seqRunning = false;
   if(seqTimer) clearTimeout(seqTimer);
+  if(seqLimit) clearTimeout(seqLimit);
   seqTimer = null;
+  seqLimit = null;
   seqIdx = 0;
   CHECK_SEQ.forEach((_, i)=>{
     const a = audios[seqKey(i)];
@@ -579,12 +581,23 @@ function seqRun(i){
   const key = seqKey(i);
   const a = audios[key];
   if(!a){ seqTimer = setTimeout(()=>seqRun(i+1), SEQ_GAP); return; }
-  const onEnd = ()=>{
-    a.removeEventListener("ended", onEnd);
+
+  // 鳴り終わりの合図（ended）で次へ進む。
+  // iPad ではこの合図を取りこぼして止まることがあるので、
+  // 音の長さ＋2.5秒たったら合図を待たずに次へ進む保険も置く。
+  let moved = false;
+  const goNext = ()=>{
+    if(moved) return;
+    moved = true;
+    a.removeEventListener("ended", goNext);
+    if(seqLimit){ clearTimeout(seqLimit); seqLimit = null; }
     if(!seqRunning) return;
     seqTimer = setTimeout(()=>seqRun(i+1), SEQ_GAP);
   };
-  a.addEventListener("ended", onEnd);
+  a.addEventListener("ended", goNext);
+  const dur = (a.duration && isFinite(a.duration) && a.duration > 0) ? a.duration : 20;
+  seqLimit = setTimeout(goNext, dur * 1000 + 2500);
+
   playFile(key);
 }
 
