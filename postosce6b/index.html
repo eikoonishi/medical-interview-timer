@@ -392,7 +392,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261206e";
+const VERSION = "20261206f";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -465,153 +465,139 @@ let sched = [];       // {ms, name, bell, file, msg, st, kind}
 let slots = [];       // {n, E, S, I, R}  (ms)
 let armed = false;
 let fired = new Set();
-let audios = {};
-let tick = null;
-let wakeLock = null;
-
 /* =========================================================
-   音声
+   音声（Web Audio）
+   -----------------------------------------------------------
+   iPad は音声要素ごとに再生の許可を求め、1回のタップで1つしか
+   許可しない。31個の要素を持つ方式では、どうしても鳴らない音が
+   残る（10月の本番で実際に起きた）。
+   Web Audio には要素という概念がなく、AudioContext を1回
+   起こせば、以降は何本でも自由に鳴らせる。
    ========================================================= */
-function initAudio(){
-  ALL_FILES.forEach(f=>{
-    if(audios[f]) return;
-    const a = new Audio(`/postosce6/sounds/${f}.mp3?v=${encodeURIComponent(VERSION)}`);
-    a.preload = "auto";
-    audios[f] = a;
-  });
-}
-// iOS/iPadOS は「指でタップした操作の中で実際に音を鳴らした」ことを求める。
-// 以前は全要素を無音で一斉に play→pause していたが、これでは許可が下りず、
-// しかも要素を不安定にしていた（本番で鳴らない原因）。
-// いまは「タイマー開始」のタップの中で、ベルを1回だけ実音で鳴らす。それだけ。
-let audioReady = false;
-function unlockAudio(){
-  initAudio();
-  if(audioReady) return Promise.resolve(true);
-  const a = audios["bell"];
-  if(!a) return Promise.resolve(false);
-  try{
-    a.muted = false; a.volume = 1; a.currentTime = 0;
-    return a.play().then(()=>{ audioReady = true; return true; })
-                   .catch(()=>{ audioReady = false; return false; });
-  }catch(e){ return Promise.resolve(false); }
+let actx = null;                 // 音の出口。タップの中で起こす
+let buffers = {};                // デコード済みの音データ
+let curSrc = null;               // いま鳴っているもの
+let audioReady = false;          // 起こせたか
+let loadState = { done:0, total:0, failed:[] };
+
+// タップの中から呼ぶこと。ここで起こさないと以降ずっと鳴らない。
+async function startAudio(){
+  if(!actx){
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if(actx.state === "suspended"){
+    try{ await actx.resume(); }catch(e){}
+  }
+  audioReady = (actx.state === "running");
+  return audioReady;
 }
 
-// 「チーン」単独（音声テスト用）
+// 「チーン」。音データが未読込でも鳴らせるよう、合成音で出す
 function bell(){
-  playFile("bell");
+  if(!actx) return;
+  try{
+    const t = actx.currentTime;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.setValueAtTime(1046, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.45, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    o.connect(g).connect(actx.destination);
+    o.start(t); o.stop(t + 1.3);
+  }catch(e){}
 }
-// ♪のついた放送は「ベル＋アナウンス」が1本にまとまった _b を鳴らす。
-// 2つを同時に鳴らすと iOS でアナウンス側が出ないことがあるため。
+
+// 音声をまとめて読み込む。進捗は onProgress(済み, 全体) で返す
+async function loadAudio(onProgress){
+  if(!actx) return false;
+  loadState = { done:0, total:ALL_FILES.length, failed:[] };
+  for(const f of ALL_FILES){
+    if(buffers[f]){ loadState.done++; if(onProgress) onProgress(loadState.done, loadState.total); continue; }
+    try{
+      const res = await fetch(`/postosce6/sounds/${f}.mp3?v=${encodeURIComponent(VERSION)}`);
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      const ab = await res.arrayBuffer();
+      buffers[f] = await new Promise((ok, ng)=>{
+        let done = false;
+        const t = setTimeout(()=>{ if(!done){ done = true; ng(new Error("timeout")); } }, 30000);
+        actx.decodeAudioData(ab,
+          buf => { if(!done){ done = true; clearTimeout(t); ok(buf); } },
+          err => { if(!done){ done = true; clearTimeout(t); ng(err || new Error("decode")); } });
+      });
+    }catch(e){
+      loadState.failed.push(f);
+    }
+    loadState.done++;
+    if(onProgress) onProgress(loadState.done, loadState.total);
+  }
+  return loadState.failed.length === 0;
+}
+
+function stopPlaying(){
+  if(curSrc){ try{ curSrc.stop(); }catch(e){} curSrc = null; }
+}
+function stopAll(){ stopPlaying(); }
+
+// ♪のついた放送は「ベル＋アナウンス」が1本にまとまった _b を鳴らす
 function fileFor(ev){
   if(!ev.file) return null;
-  return ev.bell && audios[ev.file + "_b"] ? ev.file + "_b" : ev.file;
+  return ev.bell && buffers[ev.file + "_b"] ? ev.file + "_b" : ev.file;
 }
-function playFile(f){
-  if(!f) return;
-  initAudio();
-  const a = audios[f];
-  if(!a) return;
-  a.__wanted = true;                                   // 解除処理に止められないための目印
-  a.addEventListener("ended", ()=>{ a.__wanted = false; }, {once:true});
-  // iOS では再生が弾かれることがあるので、数回鳴らし直す
-  let tries = 0;
-  const go = ()=>{
-    try{
-      a.muted = false; a.volume = 1;
-      if(a.currentTime > 0.02) a.currentTime = 0;
-      const p = a.play();
-      if(p && p.catch) p.catch(()=>{ if(++tries <= 4) setTimeout(go, 180); });
-    }catch(e){ if(++tries <= 4) setTimeout(go, 180); }
-  };
-  try{ a.pause(); a.currentTime = 0; }catch(e){}
-  go();
+
+// 1本鳴らす。鳴り始めと鳴り終わりを onStart / onEnd で知らせる
+function playFile(f, onEnd){
+  if(!f || !actx || !buffers[f]) return false;
+  if(actx.state === "suspended"){ try{ actx.resume(); }catch(e){} }
+  if(actx.state !== "running") return false;
+  stopPlaying();
+  try{
+    const src = actx.createBufferSource();
+    const g = actx.createGain();
+    g.gain.value = 1;
+    src.buffer = buffers[f];
+    src.connect(g).connect(actx.destination);
+    src.onended = ()=>{ if(curSrc === src) curSrc = null; if(onEnd) onEnd(); };
+    src.start();
+    curSrc = src;
+    return true;
+  }catch(e){ return false; }
 }
+
 function announce(ev){
   const f = fileFor(ev);
   if(!f) return;
-  playFile(f);
-  // 本当に鳴り出したか確かめ、鳴っていなければ鳴らし直す（最大5回・約2秒）
-  const a = audios[f];
-  if(!a) return;
-  let n = 0;
-  const check = ()=>{
-    if(a.currentTime > 0.05 || a.ended){ lastOk = Date.now(); lastFail = null; return; }
-    if(++n > 5){ lastFail = f; return; }
-    try{ a.play().catch(()=>{}); }catch(e){}
-    setTimeout(check, 350);
-  };
-  setTimeout(check, 350);
+  const ok = playFile(f);
+  if(ok){ lastOk = Date.now(); lastFail = null; }
+  else   { lastFail = f; }
 }
 let lastFail = null, lastOk = 0;
 
 // 音が出ないときの状態表示
 function runDiag(){
-  unlockAudio();
-  initAudio();
-  const probe = new Audio();
   const L = [];
   L.push("版　　　　： " + VERSION);
-  L.push("形式　　　： mp3（この版）");
-  L.push("mp3の再生 ： " + (probe.canPlayType("audio/mpeg") || "×  このブラウザは再生できません"));
-  let ok = 0; const bad = [];
-  ALL_FILES.forEach(f=>{
-    const a = audios[f];
-    if(!a){ bad.push(f + "(未作成)"); return; }
-    if(a.error) bad.push(f + "(エラー" + a.error.code + ")");
-    else if(a.readyState >= 1) ok++;
-  });
-  L.push("読み込み　： " + ok + " / " + ALL_FILES.length + " 件");
-  if(bad.length) L.push("読めない　： " + bad.slice(0, 6).join("  "));
+  L.push("方式　　　： Web Audio");
+  L.push("音の出口　： " + (actx ? actx.state + "  " + actx.sampleRate + "Hz" : "未起動"));
+  L.push("読み込み　： " + loadState.done + " / " + loadState.total + " 件");
+  if(loadState.failed.length) L.push("読めない　： " + loadState.failed.join("  "));
   L.push("");
   const d = $("diag");
   d.hidden = false;
-  d.textContent = L.join("\n") + "\n通信を確認しています…";
 
-  // 音声ファイルが本当に取得できるかを確かめる
-  fetch("/postosce6/sounds/bell.mp3?x=" + Date.now(), { cache: "no-store" })
-    .then(r => r.blob().then(b => {
-      L.push("通信テスト： HTTP " + r.status + "  " + (r.headers.get("content-type") || "型なし") + "  " + b.size + " バイト");
-      d.textContent = L.join("\n");
-    }))
-    .catch(e => {
-      L.push("通信テスト： 取得できません（" + (e && e.message ? e.message : e) + "）");
-      L.push("　→ ネットワークかセキュリティソフトが音声ファイルを止めている可能性があります。");
-      d.textContent = L.join("\n");
-    });
-
-  L.push("「入室してください」を鳴らしています…");
-  d.textContent = L.join("\n");
-
-  const a = audios["enter"];
-  const show = extra => { d.textContent = L.join("\n") + "\n" + extra; };
-  try{
-    a.__wanted = true; a.muted = false; a.volume = 1; a.currentTime = 0;
-    a.play().then(()=>{
-      setTimeout(()=>{
-        if(a.currentTime > 0.15) show("結果　　　： 再生できました（" + a.currentTime.toFixed(1) + "秒まで進みました）\n音が聞こえないときは、パソコンの音量と、タブのミュート（タブを右クリック →「タブのミュートを解除」）をご確認ください。");
-        else show("結果　　　： 再生が始まりませんでした。この画面をそのまま撮って送ってください。");
-      }, 1600);
-    }).catch(e=>{
-      show("結果　　　： 再生できません（" + (e && e.name ? e.name : e) + "）\nこの画面をそのまま撮って送ってください。");
-    });
-  }catch(e){
-    show("結果　　　： 再生できません（" + e + "）");
+  if(!actx || actx.state !== "running"){
+    L.push("音声がまだ起きていません。");
+    L.push("「タイマー開始」を押すと起きます。");
+    d.textContent = L.join("\n");
+    return;
   }
-}
-
-// いま鳴っているものだけ止める。
-// 全要素に触ると iOS では次の再生が弾かれることがあるので、最小限にする。
-function stopPlaying(){
-  Object.values(audios).forEach(a=>{
-    if(!a.paused){ a.__wanted = false; try{ a.pause(); a.currentTime = 0; }catch(e){} }
-  });
-}
-function stopAll(){
-  Object.values(audios).forEach(a=>{
-    a.__wanted = false;
-    try{ a.pause(); a.currentTime = 0; }catch(e){}
-  });
+  L.push("「入室してください」を鳴らします…");
+  d.textContent = L.join("\n");
+  const ok = playFile("enter_b");
+  setTimeout(()=>{
+    d.textContent = L.join("\n") + "\n結果　　　： "
+      + (ok ? "鳴らしました（聞こえない場合は音量と消音を確認してください）"
+            : "鳴らせませんでした。この画面を撮って送ってください。");
+  }, 1200);
 }
 
 /* =========================================================
@@ -760,8 +746,8 @@ function update(){
     $("warnMsg").textContent = "🔊 音声：正常";
     $("warnMsg").className = "okmsg";
   }else{
-    $("warnMsg").textContent = audioReady ? "🔊 音声：準備できています" : "";
-    $("warnMsg").className = "okmsg";
+    $("warnMsg").textContent = audioReady ? "✅ 音声：準備OK" : "🔊 音声：未準備";
+    $("warnMsg").className = audioReady ? "okmsg" : "ng";
   }
 
   const nx = sched.find(ev => ev.ms > nowMs && ev.file);
@@ -844,21 +830,40 @@ async function requestWakeLock(){
   }catch(e){}
 }
 async function start(){
-  const ok = await unlockAudio();        // ここで「チーン」が1回鳴る＝音声の許可が下りる
-  if(!ok && !confirm("音が鳴りませんでした。\n音量とスピーカーを確認してください。\n\nこのまま開始しますか？")) return;
+  // ページを開くたび、必ずここで音声を起こし直す（リロードされても1タップで復旧）
+  const ok = await startAudio();
+  if(!ok){
+    alert("音声を起動できませんでした。\n画面をもう一度タップして、やり直してください。");
+    return;
+  }
+  bell();                                   // タップの中で実際に鳴らす
+
   if(!buildSchedule()){ alert("実施日と入室時刻を入力してください。"); return; }
+
+  // 音声データを読み込む（1回だけ。2回目以降はすぐ終わる）
+  if(loadState.done < ALL_FILES.length || loadState.failed.length){
+    $("stateNote").textContent = "音声を読み込んでいます…";
+    $("btnStart").disabled = true;
+    await loadAudio((n, t)=>{ $("stateNote").textContent = `音声を読み込んでいます… ${n} / ${t}`; });
+    $("btnStart").disabled = false;
+    if(loadState.failed.length){
+      $("stateNote").textContent = `${loadState.failed.length}件の音声を読み込めませんでした。通信を確認してください。`;
+      if(!confirm(`${loadState.failed.length}件の音声を読み込めませんでした。\nこのまま開始しますか？`)) return;
+    }
+  }
+
   // いまの時刻が時刻表の途中なら、そこから始まることを知らせる
   const t = Date.now();
   if(sched.length && t > sched[0].ms){
     let cur = "開始前";
     for(const ev of sched){ if(ev.ms > t) break; if(ev.st) cur = ev.st; }
-    const ok = confirm(
+    const go = confirm(
       `いまの時刻は、この時刻表では「${cur}」にあたります。\n` +
       `このまま途中から開始しますか？\n\n` +
-      `最初（第1G①）から始めたいときは「キャンセル」を押して、\n` +
-      `「入室時刻に現在時刻を入れる」で入室時刻を入れ直してください。`
+      `最初から始めたいときは「キャンセル」を押して、\n` +
+      `「この時刻に現在時刻を入れる」で時刻を入れ直してください。`
     );
-    if(!ok) return;
+    if(!go) return;
   }
 
   // 現在時刻より前の放送は「済み」にする（途中から開始しても一気に鳴らない）
@@ -913,30 +918,18 @@ function init(){
     const b = document.createElement("button");
     b.className = "btn sm";
     b.textContent = label;
-    b.onclick = ()=>{
-      // ここで audioReady を立ててはいけない。鳴らなかった場合でも「音声OK」に
-      // なってしまい、「タイマー開始」時の実音チェックが飛ばされる。
-      // audioReady は unlockAudio() の再生が成功したときだけ true にする。
-      initAudio();
-      stopPlaying();                       // 前の音を止めてから鳴らす
-      const key = (file === "__bell") ? "bell"
-                : (label.includes("♪") && audios[file + "_b"]) ? file + "_b"
-                : file;
-      playFile(key);
-      // 実際に鳴っているあいだだけ色をつける（鳴らなければ色がつかない）
-      const a = audios[key];
-      if(!a) return;
+    b.onclick = async ()=>{
+      await startAudio();                    // タップの中で起こす
+      if(file === "__bell"){ bell(); return; }
+      if(!buffers[file] && !buffers[file + "_b"]){
+        b.textContent = label + "（読込中）";
+        await loadAudio();
+        b.textContent = label;
+      }
+      const key = (label.includes("♪") && buffers[file + "_b"]) ? file + "_b" : file;
       b.classList.remove("playing");
-      const on  = ()=> b.classList.add("playing");
-      const off = ()=>{
-        b.classList.remove("playing");
-        a.removeEventListener("playing", on);
-        a.removeEventListener("ended", off);
-        a.removeEventListener("pause", off);
-      };
-      a.addEventListener("playing", on);
-      a.addEventListener("ended", off);
-      a.addEventListener("pause", off);
+      const ok = playFile(key, ()=> b.classList.remove("playing"));
+      if(ok) b.classList.add("playing");
     };
     tg.appendChild(b);
   });
@@ -950,7 +943,6 @@ function init(){
   $("btnSheetClose").onclick = ()=> $("sheet").classList.remove("show");
   $("btnJump").onclick = jumpToNow;
 
-  initAudio();
   if(tick) clearInterval(tick);
   tick = setInterval(update, 200);
   update();
