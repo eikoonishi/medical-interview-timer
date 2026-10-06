@@ -392,7 +392,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261206d";
+const VERSION = "20261206e";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -544,6 +544,61 @@ function announce(ev){
   setTimeout(check, 350);
 }
 let lastFail = null, lastOk = 0;
+
+// 音が出ないときの状態表示
+function runDiag(){
+  unlockAudio();
+  initAudio();
+  const probe = new Audio();
+  const L = [];
+  L.push("版　　　　： " + VERSION);
+  L.push("形式　　　： mp3（この版）");
+  L.push("mp3の再生 ： " + (probe.canPlayType("audio/mpeg") || "×  このブラウザは再生できません"));
+  let ok = 0; const bad = [];
+  ALL_FILES.forEach(f=>{
+    const a = audios[f];
+    if(!a){ bad.push(f + "(未作成)"); return; }
+    if(a.error) bad.push(f + "(エラー" + a.error.code + ")");
+    else if(a.readyState >= 1) ok++;
+  });
+  L.push("読み込み　： " + ok + " / " + ALL_FILES.length + " 件");
+  if(bad.length) L.push("読めない　： " + bad.slice(0, 6).join("  "));
+  L.push("");
+  const d = $("diag");
+  d.hidden = false;
+  d.textContent = L.join("\n") + "\n通信を確認しています…";
+
+  // 音声ファイルが本当に取得できるかを確かめる
+  fetch("/postosce6/sounds/bell.mp3?x=" + Date.now(), { cache: "no-store" })
+    .then(r => r.blob().then(b => {
+      L.push("通信テスト： HTTP " + r.status + "  " + (r.headers.get("content-type") || "型なし") + "  " + b.size + " バイト");
+      d.textContent = L.join("\n");
+    }))
+    .catch(e => {
+      L.push("通信テスト： 取得できません（" + (e && e.message ? e.message : e) + "）");
+      L.push("　→ ネットワークかセキュリティソフトが音声ファイルを止めている可能性があります。");
+      d.textContent = L.join("\n");
+    });
+
+  L.push("「入室してください」を鳴らしています…");
+  d.textContent = L.join("\n");
+
+  const a = audios["enter"];
+  const show = extra => { d.textContent = L.join("\n") + "\n" + extra; };
+  try{
+    a.__wanted = true; a.muted = false; a.volume = 1; a.currentTime = 0;
+    a.play().then(()=>{
+      setTimeout(()=>{
+        if(a.currentTime > 0.15) show("結果　　　： 再生できました（" + a.currentTime.toFixed(1) + "秒まで進みました）\n音が聞こえないときは、パソコンの音量と、タブのミュート（タブを右クリック →「タブのミュートを解除」）をご確認ください。");
+        else show("結果　　　： 再生が始まりませんでした。この画面をそのまま撮って送ってください。");
+      }, 1600);
+    }).catch(e=>{
+      show("結果　　　： 再生できません（" + (e && e.name ? e.name : e) + "）\nこの画面をそのまま撮って送ってください。");
+    });
+  }catch(e){
+    show("結果　　　： 再生できません（" + e + "）");
+  }
+}
 
 // いま鳴っているものだけ止める。
 // 全要素に触ると iOS では次の再生が弾かれることがあるので、最小限にする。
