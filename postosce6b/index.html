@@ -276,16 +276,17 @@ tr.now td{color:var(--warn);font-weight:700}
         <select id="anchorSlot"></select>
       </div>
       <div>
-        <label>その受験者の入室時刻</label>
+        <label id="anchorLabel">その受験者の入室時刻</label>
         <input type="time" id="anchorTime" value="10:00">
       </div>
       <div>
-        <button class="btn sm" id="btnNow">入室時刻に現在時刻を入れる</button>
+        <button class="btn sm" id="btnNow">この時刻に現在時刻を入れる</button>
       </div>
     </div>
     <div class="note">
       通常は <b>第1G① / 10:00</b> のまま、下の「タイマー開始」を押してください。<br>
-      途中から始めるときは、基準にする受験者を選んで入室時刻を入れると、そこを起点に全体の時刻表がスライドします。<b>「入室時刻に現在時刻を入れる」</b>を押すと、選んだ受験者の入室時刻が<b>いまの時刻の1分後</b>になり、すぐに始められます。
+      基準は<b>受験者の入室時刻</b>のほか、<b>音声確認の時刻</b>でも指定できます。選んだものの時刻を入れると、そこを起点に全体の時刻表がスライドします。<br>
+      <b>「この時刻に現在時刻を入れる」</b>を押すと<b>いまの1分後</b>が入るので、すぐ試せます（音声確認を選べば、1分後に音声確認が流れます）。
     </div>
     <div class="btnrow">
       <button class="btn" id="btnStart">タイマー開始</button>
@@ -390,7 +391,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261206a";
+const VERSION = "20261206b";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -455,6 +456,7 @@ const ALL_FILES = ["bell","check1","check2","check3","check4","check5","check6",
   "check_all"];
 
 const BASE_ANCHOR = toSec("10:00");   // SLOTS の基準
+const CHECK_TIME = "09:15";           // 音声確認の標準時刻（FIXED の先頭と同じ）
 const D_START = 60, D_INT = 12*60, D_REP = 4*60;   // 入室→開始1分 / 面接12分 / 報告4分
 
 /* ---------- 状態 ---------- */
@@ -565,8 +567,10 @@ function buildSchedule(){
   const anchorTime = $("anchorTime").value;
   if(!dateStr || !anchorTime || isNaN(anchorIdx)) return false;
 
-  // 基準枠の入室時刻を合わせるためのシフト量（秒）
-  const shift = toSec(anchorTime) - toSec(SLOTS[anchorIdx].e);
+  // 基準に選んだものの標準時刻と、入力された時刻の差だけ全体をずらす
+  // anchorIdx が -1 のときは「音声確認」を基準にする
+  const baseSec = anchorIdx < 0 ? toSec(CHECK_TIME) : toSec(SLOTS[anchorIdx].e);
+  const shift = toSec(anchorTime) - baseSec;
 
   const d = new Date(dateStr + "T00:00:00");
   const dayMs = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0,0).getTime();
@@ -830,14 +834,22 @@ function init(){
   $("verLabel").textContent = `版 ${VERSION}`;
 
   const sel = $("anchorSlot");
+  const oc = document.createElement("option");
+  oc.value = -1;
+  oc.textContent = `音声確認（標準 ${CHECK_TIME}）`;
+  sel.appendChild(oc);
   SLOTS.forEach((s,i)=>{
     const o = document.createElement("option");
     o.value = i;
     o.textContent = `${s.n}（標準 ${s.e} 入室）`;
     sel.appendChild(o);
   });
-  sel.value = 0;
-  sel.addEventListener("change", ()=>{ $("anchorTime").value = SLOTS[sel.value].e; });
+  sel.value = 0;                                  // 既定は第1G①の入室時刻
+  sel.addEventListener("change", ()=>{
+    const i = parseInt(sel.value, 10);
+    $("anchorTime").value = i < 0 ? CHECK_TIME : SLOTS[i].e;
+    $("anchorLabel").textContent = i < 0 ? "音声確認を流す時刻" : "その受験者の入室時刻";
+  });
 
   // 音声テストボタン
   const tg = $("testGrid");
