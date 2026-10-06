@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<title>Web Audio テスト（iPad）</title>
+<title>Web Audio 長時間テスト</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -25,13 +25,20 @@ h1{font-size:21px;font-weight:700;margin-bottom:4px}
 .btn:active{opacity:.75}
 .btn[disabled]{opacity:.4}
 .btn.sm{font-size:14px;padding:10px 14px;min-height:46px;width:auto;border-color:var(--line);background:#fff;color:var(--ink)}
-.state{font-size:26px;font-weight:700;text-align:center;margin:16px 0;line-height:1.4}
+.pick{display:flex;gap:8px;margin-bottom:14px}
+.pick button{flex:1;font-family:inherit;font-size:15px;font-weight:700;padding:12px 8px;border-radius:10px;
+  border:2px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;min-height:50px}
+.pick button.on{border-color:var(--ink);background:var(--ink);color:#fff}
+.ready{font-size:17px;font-weight:700;padding:10px 0;text-align:center;border-radius:10px;margin-bottom:12px;background:var(--panel)}
+.ready.ok{color:var(--ok)}
+.ready.ng{color:var(--ng)}
+.state{font-size:26px;font-weight:700;text-align:center;margin:16px 0;line-height:1.35}
 .state small{font-size:13px;font-weight:500;color:var(--mute);display:block;margin-top:4px}
 .state.ok{color:var(--ok)}
 .state.ng{color:var(--ng)}
-.steps{display:grid;gap:8px;margin-top:8px}
-.step{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:baseline;
-  font-size:14px;padding:8px 0;border-bottom:1px solid var(--line)}
+.steps{display:grid;gap:0;margin-top:8px}
+.step{display:grid;grid-template-columns:26px 1fr auto;gap:10px;align-items:baseline;
+  font-size:13.5px;padding:9px 0;border-bottom:1px solid var(--line)}
 .step .n{font-weight:700;color:var(--mute)}
 .step .r{font-weight:700;white-space:nowrap}
 .step .r.ok{color:var(--ok)}
@@ -43,24 +50,34 @@ pre{margin-top:12px;padding:12px;border:2px solid var(--line);border-radius:10px
 </head>
 <body>
 <div class="wrap">
-  <h1>Web Audio テスト</h1>
-  <div class="sub">これが通れば、12月版はこの方式で作ります　<span id="ver"></span></div>
+  <h1>Web Audio 長時間テスト</h1>
+  <div class="sub">本番と同じ条件で確かめます　<span id="ver"></span></div>
 
   <div class="box">
-    <h2>やること</h2>
+    <h2>待ち時間を選んでください</h2>
     <div class="desc">
-      音声を「要素」ではなく「データ」として持つ方式を試します。<br>
-      <b>ボタンを押したら、60秒間 iPad に触らないでください。</b>画面も消さないでください。<br>
-      押した直後に「ポン」と1回鳴り、そのあと静かになります。
+      まず<b>1分</b>で動くことを確かめ、そのあと<b>30分</b>で本番と同じ条件を試すのがおすすめです。
     </div>
+    <div class="pick" id="pick">
+      <button data-m="1">1分</button>
+      <button data-m="10">10分</button>
+      <button data-m="30" class="on">30分</button>
+    </div>
+    <div class="ready ng" id="ready">🔊 音声：未準備</div>
     <button class="btn" id="go">テストを開始する</button>
     <div class="state" id="state"></div>
     <div class="steps">
       <div class="step"><span class="n">1</span><span>音声の仕組みを起動（タップ中）</span><span class="r" id="s1">—</span></div>
-      <div class="step"><span class="n">2</span><span>「ポン」が鳴る</span><span class="r" id="s2">—</span></div>
-      <div class="step"><span class="n">3</span><span>音声データを読み込む</span><span class="r" id="s3">—</span></div>
-      <div class="step"><span class="n">4</span><span>60秒待つ（触らない）</span><span class="r" id="s4">—</span></div>
-      <div class="step"><span class="n">5</span><span><b>60秒後に自動で鳴るか</b></span><span class="r" id="s5">—</span></div>
+      <div class="step"><span class="n">2</span><span>チーンが1回鳴る</span><span class="r" id="s2">—</span></div>
+      <div class="step"><span class="n">3</span><span>音声データを読み込む（2本）</span><span class="r" id="s3">—</span></div>
+      <div class="step"><span class="n">4</span><span>放置する（触らない）</span><span class="r" id="s4">—</span></div>
+      <div class="step"><span class="n">5</span><span><b>音声確認が鳴り始めるか</b></span><span class="r" id="s5">—</span></div>
+      <div class="step"><span class="n">6</span><span><b>3分40秒を最後まで流し切るか</b></span><span class="r" id="s6">—</span></div>
+      <div class="step"><span class="n">7</span><span><b>その30秒後に次の音声が鳴るか</b></span><span class="r" id="s7">—</span></div>
+    </div>
+    <div class="desc" style="margin-top:12px;margin-bottom:0">
+      5〜7が全部◯なら、本番タイマーに移せます。<br>
+      <b>音が最後まで聞こえたかも、耳で確かめてください。</b>
     </div>
   </div>
 
@@ -73,10 +90,11 @@ pre{margin-top:12px;padding:12px;border:2px solid var(--line);border-radius:10px
 </div>
 
 <script>
-const V = "20261006c";
+const V = "20261006d";
 const BASE = "/postosce6/sounds/";
-const TARGET = "check_all";     // 本番と同じ長い音声（3分40秒）
-const WAIT_SEC = 60;
+const LONG = "check_all";      // 3分40秒。本番の音声確認
+const NEXT = "enter_b";        // そのあとに鳴らす別の音声
+const GAP_SEC = 30;            // 長い音声が終わってから次を鳴らすまで
 
 const $ = id => document.getElementById(id);
 const L = [];
@@ -87,19 +105,70 @@ function step(id, ok, txt){
   el.textContent = txt || (ok === null ? "…" : ok ? "◯" : "✗");
   el.className = "r " + (ok === null ? "" : ok ? "ok" : "ng");
 }
-function state(txt, cls){ $("state").textContent = txt; $("state").className = "state " + (cls||""); }
+function state(html, cls){ $("state").innerHTML = html; $("state").className = "state " + (cls||""); }
+function ready(ok){
+  $("ready").textContent = ok ? "✅ 音声：準備OK" : "🔊 音声：未準備";
+  $("ready").className = "ready " + (ok ? "ok" : "ng");
+}
 
-let ctx = null, buf = null, src = null;
+let waitMin = 30;
+$("pick").addEventListener("click", e=>{
+  const b = e.target.closest("button");
+  if(!b) return;
+  [...$("pick").children].forEach(x=>x.classList.toggle("on", x === b));
+  waitMin = parseInt(b.dataset.m, 10);
+});
+
+let ctx = null;
+const buf = {};
+
+/* Web Audio で1本鳴らし、終わるまで待つ。鳴り始めと鳴り終わりを別々に判定する */
+function playBuffer(name, gain){
+  return new Promise(resolve=>{
+    const b = buf[name];
+    if(!b){ resolve({started:false, finished:false, played:0, note:"データなし"}); return; }
+    try{
+      const src = ctx.createBufferSource();
+      const g = ctx.createGain();
+      g.gain.value = gain == null ? 0.6 : gain;
+      src.buffer = b;
+      src.connect(g).connect(ctx.destination);
+      const t0 = ctx.currentTime;
+      let done = false;
+      src.onended = ()=>{
+        if(done) return;
+        done = true;
+        const played = ctx.currentTime - t0;
+        resolve({ started:true, finished: played >= b.duration - 1.5, played, dur:b.duration });
+      };
+      src.start();
+      // 鳴り始めたかは3秒後に判定（終了は onended を待つ）
+      setTimeout(()=>{
+        if(ctx.currentTime - t0 < 1.5 || ctx.state !== "running"){
+          if(!done){ done = true; try{ src.stop(); }catch(e){}
+            resolve({ started:false, finished:false, played: ctx.currentTime - t0, note: ctx.state }); }
+        }
+      }, 3000);
+      // 保険：想定より20秒以上長引いたら打ち切る
+      setTimeout(()=>{
+        if(!done){ done = true; try{ src.stop(); }catch(e){}
+          resolve({ started:true, finished:false, played: ctx.currentTime - t0, dur:b.duration, note:"時間切れ" }); }
+      }, (b.duration + 20) * 1000);
+    }catch(e){ resolve({started:false, finished:false, played:0, note:String(e)}); }
+  });
+}
 
 $("go").onclick = async ()=>{
   $("go").disabled = true;
   L.length = 0;
-  log("=== Web Audio テスト ===");
+  ready(false);
+  log("=== Web Audio 長時間テスト ===");
   log("日時　： " + new Date().toLocaleString());
   log("端末　： " + navigator.userAgent);
+  log("待ち　： " + waitMin + "分");
   log("");
 
-  // ---- 1. タップの中で AudioContext を起こす（ここが肝）----
+  // 1. タップの中で起動
   step("s1", null);
   try{
     ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -111,95 +180,98 @@ $("go").onclick = async ()=>{
     state("起動できませんでした", "ng"); $("go").disabled = false; return;
   }
 
-  // ---- 2. タップの中で短い音を鳴らす（起動の確認）----
+  // 2. タップの中でチーンを鳴らす
   step("s2", null);
   try{
     const o = ctx.createOscillator(), g = ctx.createGain();
-    o.frequency.value = 880; g.gain.value = 0.25;
+    o.frequency.setValueAtTime(1046, ctx.currentTime);
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.2);
     o.connect(g).connect(ctx.destination);
-    o.start(); o.stop(ctx.currentTime + 0.18);
-    await wait(400);
-    step("s2", ctx.state === "running");
-    log("2. 試し音　： " + (ctx.state === "running" ? "鳴らしました" : "状態 " + ctx.state));
-  }catch(e){ step("s2", false); log("2. 試し音　： 失敗 " + e); }
+    o.start(); o.stop(ctx.currentTime + 1.3);
+    await wait(500);
+    const ok = ctx.state === "running";
+    step("s2", ok);
+    ready(ok);
+    log("2. チーン　： " + (ok ? "鳴らしました" : "状態 " + ctx.state));
+  }catch(e){ step("s2", false); log("2. チーン　： 失敗 " + e); }
 
-  // ---- 3. 音声データを読み込む ----
+  // 3. 音声データを読み込む
   step("s3", null);
   state("音声を読み込んでいます…");
-  const t0 = Date.now();
   try{
-    const res = await fetch(BASE + TARGET + ".mp3?v=" + V);
-    if(!res.ok) throw new Error("HTTP " + res.status);
-    const ab = await res.arrayBuffer();
-    log("3. 取得　　： " + (ab.byteLength/1048576).toFixed(2) + "MB  (" + ((Date.now()-t0)/1000).toFixed(1) + "秒)");
-    const d0 = Date.now();
-    buf = await new Promise((ok, ng)=>{
-      let done = false;
-      const t = setTimeout(()=>{ if(!done){ done = true; ng(new Error("デコードが30秒で終わらない")); } }, 30000);
-      ctx.decodeAudioData(ab,
-        b => { if(!done){ done = true; clearTimeout(t); ok(b); } },
-        e => { if(!done){ done = true; clearTimeout(t); ng(e || new Error("デコード失敗")); } });
-    });
-    step("s3", true, (buf.duration).toFixed(0) + "秒");
-    log("3. 展開　　： " + buf.duration.toFixed(1) + "秒  "
-        + (buf.length * 4 / 1048576).toFixed(0) + "MB  (" + ((Date.now()-d0)/1000).toFixed(1) + "秒)");
+    let mb = 0;
+    for(const name of [LONG, NEXT]){
+      const t0 = Date.now();
+      const res = await fetch(BASE + name + ".mp3?v=" + V);
+      if(!res.ok) throw new Error(name + " HTTP " + res.status);
+      const ab = await res.arrayBuffer();
+      buf[name] = await new Promise((ok, ng)=>{
+        let done = false;
+        const t = setTimeout(()=>{ if(!done){ done = true; ng(new Error("デコードが30秒で終わらない")); } }, 30000);
+        ctx.decodeAudioData(ab,
+          b => { if(!done){ done = true; clearTimeout(t); ok(b); } },
+          e => { if(!done){ done = true; clearTimeout(t); ng(e || new Error("デコード失敗")); } });
+      });
+      mb += buf[name].length * 4;
+      log("3. 読込　　： " + name + "  " + buf[name].duration.toFixed(1) + "秒  ("
+          + ((Date.now()-t0)/1000).toFixed(1) + "秒)");
+    }
+    step("s3", true, (mb/1048576).toFixed(0) + "MB");
+    log("　　　　　　 合計メモリ " + (mb/1048576).toFixed(0) + "MB");
   }catch(e){
     step("s3", false);
-    log("3. 読み込み： 失敗 " + (e && e.message ? e.message : e));
-    state("音声を読み込めませんでした", "ng");
-    $("go").disabled = false; return;
+    log("3. 読込　　： 失敗 " + (e && e.message ? e.message : e));
+    state("音声を読み込めませんでした", "ng"); $("go").disabled = false; return;
   }
 
-  // ---- 4. 60秒待つ ----
+  // 4. 放置
   step("s4", null);
   log("");
-  log("--- " + WAIT_SEC + "秒待ちます（触らないでください）---");
-  for(let i = WAIT_SEC; i > 0; i--){
-    state(i + "秒", "");
-    $("state").innerHTML = i + "<small>秒後に自動で鳴ります。触らずにお待ちください</small>";
+  log("--- " + waitMin + "分 放置します（触らないでください）---");
+  const until = Date.now() + waitMin * 60000;
+  while(Date.now() < until){
+    const left = Math.ceil((until - Date.now()) / 1000);
+    const m = Math.floor(left / 60), s = left % 60;
+    state((m > 0 ? m + "分" : "") + String(s).padStart(2,"0") + "秒"
+          + "<small>触らずにお待ちください。画面も消さないでください</small>");
     await wait(1000);
   }
-  step("s4", true);
+  step("s4", true, waitMin + "分");
 
-  // ---- 5. 自動再生（ここが本題）----
-  step("s5", null);
-  state("再生中…");
-  try{
-    log("");
-    log("5. 自動再生を試みます（" + new Date().toLocaleTimeString() + "）");
-    if(ctx.state === "suspended"){
-      log("　　※ 状態が suspended。resume を試みます");
-      try{ await ctx.resume(); }catch(e){}
-    }
-    log("　　状態： " + ctx.state);
-    src = ctx.createBufferSource();
-    const g = ctx.createGain(); g.gain.value = 0.5;
-    src.buffer = buf;
-    src.connect(g).connect(ctx.destination);
-    const a0 = ctx.currentTime;
-    src.start();
-    await wait(3000);
-    const adv = ctx.currentTime - a0;
-    const ok = ctx.state === "running" && adv > 1.5;
-    step("s5", ok);
-    log("　　結果： " + (ok ? "鳴りました" : "鳴りません") + "　進んだ時間 " + adv.toFixed(2) + "秒　状態 " + ctx.state);
-    if(ok){
-      state("◯ 鳴りました", "ok");
-      log("");
-      log("そのまま3分40秒、最後まで流れるか聞いてください。");
-      log("途中で止めたいときは画面を閉じてください。");
-    }else{
-      state("✗ 鳴りませんでした", "ng");
-      try{ src.stop(); }catch(e){}
-    }
-  }catch(e){
-    step("s5", false);
-    log("　　結果： 失敗 " + e);
-    state("✗ 鳴りませんでした", "ng");
-  }
-
+  // 5・6. 長い音声を最後まで
+  step("s5", null); step("s6", null);
+  state("音声確認を再生中…<small>最後まで聞こえるか確かめてください</small>");
   log("");
-  log("=== 終了。この記録を送ってください ===");
+  log("5. 自動再生（" + new Date().toLocaleTimeString() + "）　状態 " + ctx.state);
+  const r1 = await playBuffer(LONG);
+  step("s5", r1.started);
+  step("s6", r1.finished, r1.finished ? "◯ " + r1.played.toFixed(0) + "秒" : "✗ " + r1.played.toFixed(0) + "秒");
+  log("　　鳴り始め： " + (r1.started ? "OK" : "NG " + (r1.note||"")));
+  log("　　最後まで： " + (r1.finished ? "OK" : "NG") + "　再生 " + r1.played.toFixed(1)
+      + "秒 / 全体 " + (r1.dur||0).toFixed(1) + "秒" + (r1.note ? "  " + r1.note : ""));
+
+  // 7. その30秒後に別の音声
+  step("s7", null);
+  log("");
+  log("7. " + GAP_SEC + "秒あけて次の音声（" + NEXT + "）");
+  for(let i = GAP_SEC; i > 0; i--){
+    state(i + "秒<small>そのあと次の音声が鳴ります</small>");
+    await wait(1000);
+  }
+  state("次の音声を再生中…");
+  const r2 = await playBuffer(NEXT);
+  step("s7", r2.started && r2.finished);
+  log("　　結果　　： " + (r2.started ? "鳴った" : "鳴らない")
+      + "　最後まで " + (r2.finished ? "OK" : "NG")
+      + "　再生 " + r2.played.toFixed(1) + "秒 / 全体 " + (r2.dur||0).toFixed(1) + "秒"
+      + "　状態 " + ctx.state);
+
+  const all = r1.started && r1.finished && r2.started && r2.finished;
+  state(all ? "◯ すべて成功しました" : "✗ 失敗がありました", all ? "ok" : "ng");
+  log("");
+  log(all ? "=== すべて成功。本番タイマーに移せます ===" : "=== 失敗あり。この記録を送ってください ===");
   $("go").disabled = false;
 };
 
