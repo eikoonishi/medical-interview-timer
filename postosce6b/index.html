@@ -392,7 +392,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261206c";
+const VERSION = "20261206d";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -859,7 +859,9 @@ function init(){
     b.className = "btn sm";
     b.textContent = label;
     b.onclick = ()=>{
-      audioReady = true;                 // タップで実音を鳴らす＝許可が下りる
+      // ここで audioReady を立ててはいけない。鳴らなかった場合でも「音声OK」に
+      // なってしまい、「タイマー開始」時の実音チェックが飛ばされる。
+      // audioReady は unlockAudio() の再生が成功したときだけ true にする。
       initAudio();
       stopPlaying();                       // 前の音を止めてから鳴らす
       const key = (file === "__bell") ? "bell"
