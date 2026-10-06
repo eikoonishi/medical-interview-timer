@@ -280,13 +280,18 @@ tr.now td{color:var(--warn);font-weight:700}
         <input type="time" id="anchorTime" value="10:00">
       </div>
       <div>
+        <label>音声確認の時刻</label>
+        <input type="time" id="checkTime" value="09:15">
+      </div>
+      <div>
         <button class="btn sm" id="btnNow">この時刻に現在時刻を入れる</button>
       </div>
     </div>
     <div class="note">
       通常は <b>第1G① / 10:00</b> のまま、下の「タイマー開始」を押してください。<br>
-      基準は<b>受験者の入室時刻</b>のほか、<b>音声確認の時刻</b>でも指定できます。選んだものの時刻を入れると、そこを起点に全体の時刻表がスライドします。<br>
-      <b>「この時刻に現在時刻を入れる」</b>を押すと<b>いまの1分後</b>が入るので、すぐ試せます（音声確認を選べば、1分後に音声確認が流れます）。
+      <b>受験者の入室時刻</b>を入れると、そこを起点に全体の時刻表がスライドします（試験の時間配分は変わりません）。<br>
+      <b>音声確認の時刻は別に指定できます。</b>入室時刻を動かしても、ここで入れた時刻のまま鳴ります。<br>
+      <b>「この時刻に現在時刻を入れる」</b>を押すと、入室時刻に<b>いまの1分後</b>が入ります。
     </div>
     <div class="btnrow">
       <button class="btn" id="btnStart">タイマー開始</button>
@@ -394,7 +399,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261206i";
+const VERSION = "20261206j";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -630,10 +635,8 @@ function buildSchedule(){
   const anchorTime = $("anchorTime").value;
   if(!dateStr || !anchorTime || isNaN(anchorIdx)) return false;
 
-  // 基準に選んだものの標準時刻と、入力された時刻の差だけ全体をずらす
-  // anchorIdx が -1 のときは「音声確認」を基準にする
-  const baseSec = anchorIdx < 0 ? toSec(CHECK_TIME) : toSec(SLOTS[anchorIdx].e);
-  const shift = toSec(anchorTime) - baseSec;
+  // 基準に選んだ受験者の標準時刻と、入力された時刻の差だけ全体をずらす
+  const shift = toSec(anchorTime) - toSec(SLOTS[anchorIdx].e);
 
   const d = new Date(dateStr + "T00:00:00");
   const dayMs = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0,0).getTime();
@@ -642,8 +645,17 @@ function buildSchedule(){
   sched = [];
   slots = [];
 
+  // 音声確認だけは、設定画面で入れた時刻をそのまま使う（全体のスライドとは独立）。
+  // 前日に「9:40を9:15に」と言われても、コードを触らず設定だけで変えられるように。
+  const checkInput = $("checkTime").value;
   FIXED.forEach(f=>{
-    sched.push({ms:at(toSec(f.t)), name:"", bell:f.bell, file:f.file, msg:f.msg, st:f.st||null, kind:f.kind||"fixed"});
+    if(f.file === "check_all" && checkInput){
+      const d2 = new Date(dayMs);
+      sched.push({ms:dayMs + toSec(checkInput) * 1000, name:"", bell:f.bell, file:f.file,
+                  msg:f.msg, st:f.st||null, kind:f.kind||"fixed"});
+    }else{
+      sched.push({ms:at(toSec(f.t)), name:"", bell:f.bell, file:f.file, msg:f.msg, st:f.st||null, kind:f.kind||"fixed"});
+    }
   });
 
   SLOTS.forEach((s, i)=>{
@@ -941,10 +953,6 @@ function init(){
   $("verLabel").textContent = `版 ${VERSION}`;
 
   const sel = $("anchorSlot");
-  const oc = document.createElement("option");
-  oc.value = -1;
-  oc.textContent = `音声確認（標準 ${CHECK_TIME}）`;
-  sel.appendChild(oc);
   SLOTS.forEach((s,i)=>{
     const o = document.createElement("option");
     o.value = i;
@@ -952,11 +960,7 @@ function init(){
     sel.appendChild(o);
   });
   sel.value = 0;                                  // 既定は第1G①の入室時刻
-  sel.addEventListener("change", ()=>{
-    const i = parseInt(sel.value, 10);
-    $("anchorTime").value = i < 0 ? CHECK_TIME : SLOTS[i].e;
-    $("anchorLabel").textContent = i < 0 ? "音声確認を流す時刻" : "その受験者の入室時刻";
-  });
+  sel.addEventListener("change", ()=>{ $("anchorTime").value = SLOTS[sel.value].e; });
 
   // 音声テストボタン
   const tg = $("testGrid");
