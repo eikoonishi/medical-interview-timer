@@ -19,6 +19,7 @@ import os, shutil, subprocess, tempfile, wave
 LEAD_SEC  = 0.4       # 先頭に足す無音（秒）
 BELL_KEEP = 1.2       # ベルとして使う長さ（秒）。後半の無音を捨てる
 BELL_GAP  = 0.2       # ベルとアナウンスのあいだ（秒）
+CHECK_STEP = 30.0     # 音声確認（check_all）の中で、次の確認までの間隔（秒）
 SR        = 44100     # サンプルレート（MPEG-1 Layer III になる値）
 KBPS      = "96k"
 
@@ -102,7 +103,7 @@ def main():
 
             raw = os.path.join(tmp, name + ".wav")
             to_wav(src, raw)
-            data = read_frames(raw)
+            data = read_frames(raw)   # ※ raw は check_all 作成まで消さずに残す
             if name == "bell":
                 data = data[: int(SR * BELL_KEEP) * 2]
 
@@ -120,10 +121,29 @@ def main():
                 to_mp3(bpad, os.path.join(DST, name + "_b.mp3"))
                 print(f"  {name + '_b':<12} {len(lead + bell + gap + data) / (SR * 2):6.2f}秒  ♪ベル＋")
                 n2 += 1
+        # 音声確認の8件を1本につないだ check_all.mp3
+        # 9:15 にこれを1回再生するだけにして、連続再生の仕組みをなくすため。
+        seq = [("check1",False),("check2",True),("check3",True),("check4",False),
+               ("check5",False),("check6",False),("check7",True),("check8",False)]
+        sil = lambda s: b"\x00" * (int(SR * s) * 2)
+        merged = sil(LEAD_SEC)
+        for i, (name, has_bell) in enumerate(seq):
+            raw = os.path.join(tmp, "ca_" + name + ".wav")
+            to_wav(os.path.join(SRC, FILES[name]), raw)
+            piece = (bell + gap if has_bell else b"") + read_frames(raw)
+            merged += piece
+            if i < len(seq) - 1:
+                rest = int(SR * CHECK_STEP) * 2 - len(piece)
+                merged += sil(max(0.5, rest / (SR * 2)))
+        cpad = os.path.join(tmp, "check_all.wav")
+        write_wav(cpad, merged)
+        to_mp3(cpad, os.path.join(DST, "check_all.mp3"))
+        sec = len(merged) / (SR * 2)
+        print(f"  {'check_all':<12} {sec/60:6.2f}分  ♪2・3・7込み／{int(CHECK_STEP)}秒間隔")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
-    print(f"\n単独 {n1} 件 ＋ ベル入り {n2} 件 → {DST}")
+    print(f"\n単独 {n1} 件 ＋ ベル入り {n2} 件 ＋ check_all → {DST}")
     print(f"（{SR}Hz モノラル MP3 {KBPS} ／ 先頭 {LEAD_SEC} 秒の無音）")
 
 
