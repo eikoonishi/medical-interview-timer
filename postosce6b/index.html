@@ -302,6 +302,8 @@ tr.now td{color:var(--warn);font-weight:700}
     </div>
     <div class="btnrow" style="margin-top:14px">
       <button class="btn sm" id="btnDiag">音が出ないとき：状態を調べる</button>
+      <button class="btn sm" id="btnReload">音声を読み直す</button>
+      <span id="loadInfo" style="font-size:13px;font-weight:700"></span>
     </div>
     <pre id="diag" class="diag" hidden></pre>
   </div>
@@ -392,7 +394,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261206h";
+const VERSION = "20261206i";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -529,7 +531,22 @@ async function loadAudio(onProgress){
           err => { if(!done){ done = true; clearTimeout(t); ng(err || new Error("decode")); } });
       });
     }catch(e){
-      loadState.failed.push(f);
+      // 一度きりで諦めず、少し待ってもう一度だけ取りに行く
+      try{
+        await new Promise(r=>setTimeout(r, 400));
+        const res2 = await fetch(`/postosce6/sounds/${f}.mp3?v=${encodeURIComponent(VERSION)}&r=1`);
+        if(!res2.ok) throw new Error("HTTP " + res2.status);
+        const ab2 = await res2.arrayBuffer();
+        buffers[f] = await new Promise((ok, ng)=>{
+          let done = false;
+          const t = setTimeout(()=>{ if(!done){ done = true; ng(new Error("timeout")); } }, 30000);
+          actx.decodeAudioData(ab2,
+            buf => { if(!done){ done = true; clearTimeout(t); ok(buf); } },
+            err => { if(!done){ done = true; clearTimeout(t); ng(err || new Error("decode")); } });
+        });
+      }catch(e2){
+        loadState.failed.push(f);
+      }
     }
     loadState.done++;
     if(onProgress) onProgress(loadState.done, loadState.total);
@@ -750,7 +767,10 @@ function update(){
 
   /* --- 次の放送 --- */
   // 音声確認（8件まとめて）も「次の放送」に含める
-  if(lastSkip){
+  if(loadState.failed.length){
+    $("warnMsg").textContent = `⚠ 音声${loadState.failed.length}件が未読込（設定から読み直してください）`;
+    $("warnMsg").className = "ng";
+  }else if(lastSkip){
     $("warnMsg").textContent = "⚠ " + fmtHM(new Date(lastSkip.ms).getHours()*3600 + new Date(lastSkip.ms).getMinutes()*60)
       + " の放送を実行できませんでした";
     $("warnMsg").className = "ng";
@@ -861,15 +881,19 @@ async function start(){
     $("btnStart").disabled = true;
     await loadAudio((n, t)=>{ $("stateNote").textContent = `音声を読み込んでいます… ${n} / ${t}`; });
     $("btnStart").disabled = false;
+    // 読めなかったものがあれば、もう一度だけ自動で取りに行く
     if(loadState.failed.length){
-      // 1本でも欠けたまま始めない。欠けたのが「終了です」かもしれない。
-      $("stateNote").textContent =
-        `❌ ${loadState.failed.length}件の音声を読み込めませんでした（${loadState.failed.slice(0,4).join(" ")}）。`
-        + `通信を確認し、ページを開き直して、もう一度「タイマー開始」を押してください。`;
-      alert(`音声を${loadState.failed.length}件読み込めませんでした。\n\n`
-          + `通信を確認して、ページを開き直してから\nもう一度「タイマー開始」を押してください。\n\n`
-          + `※ 音声が欠けたままでは開始できません。`);
-      return;
+      $("stateNote").textContent = "読み込めなかった音声をもう一度取得しています…";
+      await loadAudio((n, t)=>{ $("stateNote").textContent = `読み直しています… ${n} / ${t}`; });
+    }
+    // それでも欠けている場合でも「開始はさせる」。
+    // 止めてしまうと全部の放送が鳴らなくなり、かえって危険なため。
+    // 欠けていることは画面に出し続け、設定画面から読み直せるようにする。
+    if(loadState.failed.length){
+      alert(`音声を${loadState.failed.length}件読み込めませんでした。\n`
+          + `（${loadState.failed.slice(0,5).join(" ")}）\n\n`
+          + `タイマーは開始します。ほかの放送は鳴ります。\n`
+          + `画面に警告が出続けるので、通信を確認して\n設定画面の「音声を読み直す」を押してください。`);
     }
   }
 
@@ -960,6 +984,17 @@ function init(){
   $("btnNow").onclick   = setNowAnchor;
   $("btnSetup").onclick = showSetup;
   $("btnDiag").onclick  = runDiag;
+  $("btnReload").onclick = async ()=>{
+    await startAudio();
+    $("loadInfo").textContent = "読み込み中…";
+    $("btnReload").disabled = true;
+    await loadAudio((n, t)=>{ $("loadInfo").textContent = `読み込み中… ${n} / ${t}`; });
+    $("btnReload").disabled = false;
+    $("loadInfo").textContent = loadState.failed.length
+      ? `⚠ ${loadState.failed.length}件が読めません（${loadState.failed.slice(0,4).join(" ")}）`
+      : `✅ ${loadState.total}件すべて読み込めました`;
+    $("loadInfo").style.color = loadState.failed.length ? "var(--warn)" : "#15803d";
+  };
   $("btnSheet1").onclick = ()=>{ if(!sched.length) buildSchedule(); renderSheet(); $("sheet").classList.add("show"); jumpToNow(); };
   $("btnSheet2").onclick = ()=>{ $("sheet").classList.add("show"); jumpToNow(); };
   $("btnSheetClose").onclick = ()=> $("sheet").classList.remove("show");
