@@ -392,7 +392,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261206g";
+const VERSION = "20261206h";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -471,9 +471,10 @@ let wakeLock = null;             // 画面を消さないための保持
 /* =========================================================
    音声（Web Audio）
    -----------------------------------------------------------
-   iPad は音声要素ごとに再生の許可を求め、1回のタップで1つしか
-   許可しない。31個の要素を持つ方式では、どうしても鳴らない音が
-   残る（10月の本番で実際に起きた）。
+   iPad（iPadOS 27・2026年10月に実機で確認）では、音声要素ごとに
+   再生の許可が要り、1回のタップで許可されたのは1要素だけだった。
+   31個の要素を持つ方式では、どうしても鳴らない音が残る
+   （10月の本番で実際に起きた）。
    Web Audio には要素という概念がなく、AudioContext を1回
    起こせば、以降は何本でも自由に鳴らせる。
    ========================================================= */
@@ -570,10 +571,10 @@ function announce(ev){
   const f = fileFor(ev);
   if(!f) return;
   const ok = playFile(f);
-  if(ok){ lastOk = Date.now(); lastFail = null; }
+  if(ok){ lastOk = Date.now(); lastFail = null; lastSkip = null; }
   else   { lastFail = f; }
 }
-let lastFail = null, lastOk = 0;
+let lastFail = null, lastOk = 0, lastSkip = null;
 
 // 音が出ないときの状態表示
 function runDiag(){
@@ -727,7 +728,14 @@ function update(){
     if(ev.ms > nowMs) break;
     if(fired.has(ev.ms + "|" + ev.kind + "|" + ev.name)) continue;
     fired.add(ev.ms + "|" + ev.kind + "|" + ev.name);
-    if(nowMs - ev.ms < 15000) announce(ev);   // 15秒以上過ぎた放送は流さない
+    if(nowMs - ev.ms < 15000){
+      announce(ev);
+    }else if(ev.file){
+      // 画面が止まるなどで15秒以上遅れた放送は、いまさら流さない。
+      // ただし黙って捨てず、必ず画面に出す。
+      lastSkip = ev;
+      lastFail = null;
+    }
   }
 
   /* --- 進行状況 --- */
@@ -742,7 +750,11 @@ function update(){
 
   /* --- 次の放送 --- */
   // 音声確認（8件まとめて）も「次の放送」に含める
-  if(lastFail){
+  if(lastSkip){
+    $("warnMsg").textContent = "⚠ " + fmtHM(new Date(lastSkip.ms).getHours()*3600 + new Date(lastSkip.ms).getMinutes()*60)
+      + " の放送を実行できませんでした";
+    $("warnMsg").className = "ng";
+  }else if(lastFail){
     $("warnMsg").textContent = "⚠ 放送が鳴りませんでした";
     $("warnMsg").className = "ng";
   }else if(lastOk){
@@ -850,8 +862,14 @@ async function start(){
     await loadAudio((n, t)=>{ $("stateNote").textContent = `音声を読み込んでいます… ${n} / ${t}`; });
     $("btnStart").disabled = false;
     if(loadState.failed.length){
-      $("stateNote").textContent = `${loadState.failed.length}件の音声を読み込めませんでした。通信を確認してください。`;
-      if(!confirm(`${loadState.failed.length}件の音声を読み込めませんでした。\nこのまま開始しますか？`)) return;
+      // 1本でも欠けたまま始めない。欠けたのが「終了です」かもしれない。
+      $("stateNote").textContent =
+        `❌ ${loadState.failed.length}件の音声を読み込めませんでした（${loadState.failed.slice(0,4).join(" ")}）。`
+        + `通信を確認し、ページを開き直して、もう一度「タイマー開始」を押してください。`;
+      alert(`音声を${loadState.failed.length}件読み込めませんでした。\n\n`
+          + `通信を確認して、ページを開き直してから\nもう一度「タイマー開始」を押してください。\n\n`
+          + `※ 音声が欠けたままでは開始できません。`);
+      return;
     }
   }
 
@@ -876,6 +894,7 @@ async function start(){
   armed = true;
   lastFail = null;
   lastOk = 0;
+  lastSkip = null;
   $("stateNote").textContent = "";
   renderSheet();
   requestWakeLock();
