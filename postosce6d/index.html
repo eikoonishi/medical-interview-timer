@@ -425,7 +425,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261206m";
+const VERSION = "20261206n";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -544,8 +544,8 @@ async function ensureRunning(){
   try{
     await Promise.race([
       actx.resume(),                                  // 起きたら終わる
-      new Promise(r => setTimeout(r, 1000))           // 起きなくても1秒で見切る
-    ]);
+      new Promise(r => setTimeout(r, 300))            // 起きなくても0.3秒で見切る
+    ]);                                               // （長く待つと鳴る時刻がずれるため）
   }catch(e){}
   return actx.state === "running";
 }
@@ -651,11 +651,11 @@ async function announce(ev){
   let ok = false;
   if(buffers[f] && await ensureRunning() && armed && myRun === runId){
     if(needBell){
-      // _b が読めていないので、ベルを合成で鳴らし、1.3秒後に通常版を流す
+      // _b（ベル＋アナウンス）が読めていない場合。合成のベルを鳴らしつつ、
+      // アナウンスは待たずにすぐ流す（待つと鳴る時刻が台ごとにずれるため）。
       bell();
-      ev.bellRung = true;                    // 再試行になってもベルは鳴らし直さない
-      await new Promise(r => setTimeout(r, 1300));
-      ok = armed && myRun === runId && await ensureRunning() && playFile(f);
+      ev.bellRung = true;
+      ok = playFile(f);
     }else{
       ok = playFile(f);
     }
@@ -831,25 +831,30 @@ function update(){
   if(!armed || !sched.length) return;
 
   /* --- 放送 --- */
-  // 「済み」にするのは鳴らせたときだけ。鳴らせなければ次の周期（200ms後）にもう一度試す。
+  // 15台のiPadが同じ時刻に同じ放送を鳴らすことを最優先にする。
+  // そのため、鳴らせなかった放送は「遅れて鳴らす」ことはせず、その回は捨てる。
+  // （1台だけ数秒遅れて「終了です」が鳴ると、部屋ごとに試験時間がずれてしまう）
   for(const ev of sched){
     if(ev.ms > nowMs) break;
     const key = evKey(ev);
     if(fired.has(key) || ev.busy) continue;  // 済み／いま鳴らそうとしている最中
     if(!ev.file){ fired.add(key); continue; } // 音声のない予定はすぐ済みにする
     if(nowMs - ev.ms >= 15000){
-      // 予定から15秒たっても鳴らせなかった放送は、いまさら流さない。
-      // ただし黙って捨てず、必ず画面に出す。
+      // 画面が止まるなどして大きく遅れた放送は、いまさら流さない
       fired.add(key);
       lastSkip = ev;
       lastFail = null;
       continue;
     }
-    ev.busy = true;                          // 同じ放送を重ねて鳴らさないための札
+    ev.busy = true;
     const myRun = runId;
     announce(ev)
-      .then(ok => { if(ok && myRun === runId) fired.add(key); })
-      .catch(()=>{})
+      .then(ok => {
+        if(myRun !== runId) return;
+        fired.add(key);                      // 鳴っても鳴らなくても、この放送は終わり
+        if(!ok) lastSkip = ev;               // 鳴らせなかったことは画面に出す
+      })
+      .catch(()=>{ fired.add(key); })
       .finally(()=>{ ev.busy = false; });
   }
 
@@ -874,7 +879,7 @@ function update(){
     $("warnMsg").className = "ng";
   }else if(lastSkip){
     $("warnMsg").textContent = "⚠ " + fmtHM(new Date(lastSkip.ms).getHours()*3600 + new Date(lastSkip.ms).getMinutes()*60)
-      + " の放送を実行できませんでした";
+      + " の放送が鳴りませんでした（この回は見送りました）";
     $("warnMsg").className = "ng";
   }else if(lastFail){
     $("warnMsg").textContent = "⚠ 放送が鳴りませんでした";
