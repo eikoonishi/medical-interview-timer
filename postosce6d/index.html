@@ -425,7 +425,7 @@ tr.now td{color:var(--warn);font-weight:700}
    ========================================================= */
 
 // 版：音声を差し替えたら必ずここを変える（iPadの古いキャッシュ対策）
-const VERSION = "20261206n";
+const VERSION = "20261206p";
 
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2,"0");
@@ -643,7 +643,8 @@ function playFile(f, onEnd){
 }
 
 // 放送を1件鳴らす。鳴らせたら true、鳴らせなかったら false を返す。
-// false のときは update() が次の周期でもう一度呼ぶ。
+// false のときも鳴らし直さない。その回は見送り、画面に出すだけ
+// （15台が同じ時刻に鳴ることを優先するため）。
 async function announce(ev){
   const { f, needBell } = fileFor(ev);
   if(!f) return true;                        // 音声のない予定は「済み」扱い
